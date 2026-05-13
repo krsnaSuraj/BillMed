@@ -50,7 +50,7 @@ BillMed helps shopkeepers track purchase bills from distributors and wholesalers
 
 ## 🚀 How It Works
 
-### For the Shop Owner (Papa)
+### For the Shop Owner
 
 **Three simple actions:**
 
@@ -70,7 +70,7 @@ The dashboard automatically calculates totals and pending amounts.
    → Version bumps automatically
    → Code pushes to GitHub
    → GitHub Actions builds new APK
-3. Papa opens app → sees update popup
+3. User opens app → sees update popup
 4. Taps "Update" → APK downloads → installs
 ```
 
