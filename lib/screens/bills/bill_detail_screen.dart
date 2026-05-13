@@ -29,10 +29,7 @@ class BillDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Bill Details')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)),
-          );
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)));
           ref.invalidate(_paymentsProvider(billId));
           ref.invalidate(paidAmountProvider(billId));
         },
@@ -73,10 +70,7 @@ class BillDetailScreen extends ConsumerWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                       child: const Icon(Icons.receipt, color: AppColors.info, size: 28),
                     ),
                     const SizedBox(width: 14),
@@ -92,10 +86,7 @@ class BillDetailScreen extends ConsumerWidget {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+                      decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
                       child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w600, fontSize: 14)),
                     ),
                   ],
@@ -148,7 +139,7 @@ class BillDetailScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(40),
             child: Column(
               children: [
-                Icon(Icons.payments_outlined, size: 48, color: AppColors.textSecondary.withOpacity(0.3)),
+                Icon(Icons.payments_outlined, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.3)),
                 const SizedBox(height: 12),
                 const Text('No payments recorded yet', style: TextStyle(color: AppColors.textSecondary)),
               ],
@@ -168,7 +159,7 @@ class BillDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            ...payments.map((p) => _paymentCard(p)),
+            ...payments.map((p) => _paymentCard(context, p, ref)),
           ],
         );
       },
@@ -177,76 +168,83 @@ class BillDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _paymentCard(Payment p) {
-    IconData modeIcon;
-    Color modeColor;
-    switch (p.mode) {
-      case 'Cash':
-        modeIcon = Icons.money;
-        modeColor = AppColors.success;
-        break;
-      case 'UPI':
-        modeIcon = Icons.phone_android;
-        modeColor = AppColors.info;
-        break;
-      case 'Cheque':
-        modeIcon = Icons.receipt;
-        modeColor = AppColors.warning;
-        break;
-      case 'NEFT':
-      case 'RTGS':
-        modeIcon = Icons.account_balance;
-        modeColor = AppColors.primary;
-        break;
-      default:
-        modeIcon = Icons.payment;
-        modeColor = AppColors.textSecondary;
-    }
-
+  Widget _paymentCard(BuildContext context, Payment p, WidgetRef ref) {
+    final (modeIcon, modeColor) = _paymentModeStyle(p.mode);
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: modeColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onLongPress: () => _confirmDeletePayment(context, p, ref),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: modeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(modeIcon, color: modeColor, size: 20),
               ),
-              child: Icon(modeIcon, color: modeColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('₹${p.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    Text('${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('₹${p.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                  Text('${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: modeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                    child: Text(p.mode, style: TextStyle(fontSize: 12, color: modeColor, fontWeight: FontWeight.w500)),
+                  ),
+                  if (p.referenceNo != null && p.referenceNo!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text('Ref: ${p.referenceNo}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ),
                 ],
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: modeColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(p.mode, style: TextStyle(fontSize: 12, color: modeColor, fontWeight: FontWeight.w500)),
-                ),
-                if (p.referenceNo != null && p.referenceNo!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text('Ref: ${p.referenceNo}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  (IconData, Color) _paymentModeStyle(String mode) {
+    switch (mode) {
+      case 'Cash': return (Icons.money, AppColors.success);
+      case 'UPI': return (Icons.phone_android, AppColors.info);
+      case 'Cheque': return (Icons.receipt, AppColors.warning);
+      case 'NEFT':
+      case 'RTGS': return (Icons.account_balance, AppColors.primary);
+      default: return (Icons.payment, AppColors.textSecondary);
+    }
+  }
+
+  void _confirmDeletePayment(BuildContext context, Payment p, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Payment?'),
+        content: Text('Delete payment of ₹${p.amount.toStringAsFixed(0)} from ${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(databaseProvider).deletePayment(p.id);
+              ref.invalidate(_paymentsProvider(billId));
+              ref.invalidate(paidAmountProvider(billId));
+            },
+            child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
       ),
     );
   }
