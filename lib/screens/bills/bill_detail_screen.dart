@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/status_badge.dart';
 import '../payments/add_payment_screen.dart';
 
 final _billProvider = FutureProvider.family<Bill?, int>((ref, id) async {

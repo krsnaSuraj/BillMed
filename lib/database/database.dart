@@ -72,24 +72,24 @@ class BillMedDatabase extends _$BillMedDatabase {
       (select(payments)..where((p) => p.billId.equals(billId))).watch();
 
   Future<double> getTotalPaidForBill(int billId) async {
-    final result = await (select(payments)
-          ..where((p) => p.billId.equals(billId))
-          ..columns.add(payments.amount.sum()))
-        .get();
-    return (result.first.amount.sum ?? 0.0) as double;
+    final result = await customSelect(
+      'SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE bill_id = ?',
+      variables: [Variable.withInt(billId)],
+    ).getSingle();
+    return result.read<double>('total');
   }
 
   Future<Map<int, double>> getTotalPaidForBills(List<int> billIds) async {
     if (billIds.isEmpty) return {};
-    final result = await (select(payments)
-          ..where((p) => p.billId.isIn(billIds))
-          ..addColumns([payments.billId, payments.amount.sum()])
-          ..groupBy([payments.billId]))
-        .get();
+    final placeholders = billIds.map((_) => '?').join(',');
+    final result = await customSelect(
+      'SELECT bill_id, COALESCE(SUM(amount), 0) AS total '
+      'FROM payments WHERE bill_id IN ($placeholders) GROUP BY bill_id',
+      variables: billIds.map((id) => Variable.withInt(id)).toList(),
+    ).get();
     final map = <int, double>{};
-    for (final r in result) {
-      map[r.read(payments.billId) as int] =
-          (r.read(payments.amount.sum()) ?? 0.0) as double;
+    for (final row in result) {
+      map[row.read<int>('bill_id')] = row.read<double>('total');
     }
     return map;
   }
