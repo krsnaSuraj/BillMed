@@ -223,7 +223,9 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
   }
 
   Widget _billCard(BuildContext context, Bill bill, Map<int, Distributor> distMap) {
-    final statusColor = _getStatusColor(bill);
+    final paid = _paidMap[bill.id] ?? 0.0;
+    final isOverdue = paid <= 0 && DateTime.now().difference(bill.billDate).inDays > 30;
+    final statusColor = isOverdue ? AppColors.danger : _getStatusColor(bill);
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: InkWell(
@@ -239,15 +241,31 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
+                decoration: BoxDecoration(
+                  color: isOverdue ? AppColors.danger.withValues(alpha: 0.1) : AppColors.info.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(isOverdue ? Icons.warning_amber_rounded : Icons.receipt,
+                    color: isOverdue ? AppColors.danger : AppColors.info, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('#${bill.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    Row(
+                      children: [
+                        Text('#${bill.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                        if (isOverdue) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                            child: const Text('OVERDUE', style: TextStyle(fontSize: 9, color: AppColors.danger, fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ],
+                    ),
                     if (distMap[bill.distributorId] != null)
                       Text(distMap[bill.distributorId]!.name, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                     Text('${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
