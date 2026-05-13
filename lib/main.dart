@@ -6,6 +6,8 @@ import 'screens/distributors/distributor_list_screen.dart';
 import 'screens/bills/bill_list_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'services/update_service.dart';
+import 'services/notification_service.dart';
+import 'providers/database_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,8 +53,15 @@ class _MainShellState extends ConsumerState<MainShell> {
       _checkedUpdate = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         UpdateService.checkForUpdates(context);
+        _initNotifications();
       });
     }
+  }
+
+  Future<void> _initNotifications() async {
+    await NotificationService.init();
+    final db = ref.read(databaseProvider);
+    await NotificationService.checkAndNotify(db);
   }
 
   @override
