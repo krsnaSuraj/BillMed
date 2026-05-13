@@ -5,6 +5,7 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../payments/add_payment_screen.dart';
 import 'add_bill_screen.dart';
+import '../../services/pdf_export_service.dart';
 
 final _billProvider = FutureProvider.family<Bill?, int>((ref, id) async {
   final db = ref.watch(databaseProvider);
@@ -27,7 +28,22 @@ class BillDetailScreen extends ConsumerWidget {
     final paidAsync = ref.watch(paidAmountProvider(billId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bill Details')),
+      appBar: AppBar(
+        title: const Text('Bill Details'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: () async {
+              final db = ref.read(databaseProvider);
+              await PdfExportService.generateBillPdf(db, billId);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _confirmDeleteBill(context, ref),
+          ),
+        ],
+      ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -72,6 +88,30 @@ class BillDetailScreen extends ConsumerWidget {
         },
         error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+
+  void _confirmDeleteBill(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Bill?'),
+        content: const Text('This will also delete all payments for this bill.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final db = ref.read(databaseProvider);
+              final payments = await db.getPaymentsByBill(billId);
+              for (final p in payments) await db.deletePayment(p.id);
+              await db.deleteBill(billId);
+              if (context.mounted) Navigator.pop(context, true);
+            },
+            child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
       ),
     );
   }

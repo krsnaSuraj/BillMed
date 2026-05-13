@@ -14,11 +14,25 @@ final distributorBalancesProvider = FutureProvider<List<DistributorBalance>>((re
   return summary.distributorBalances;
 });
 
-class DistributorListScreen extends ConsumerWidget {
+class DistributorListScreen extends ConsumerStatefulWidget {
   const DistributorListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DistributorListScreen> createState() => _DistributorListScreenState();
+}
+
+class _DistributorListScreenState extends ConsumerState<DistributorListScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final balancesAsync = ref.watch(distributorBalancesProvider);
 
     return Scaffold(
@@ -31,19 +45,50 @@ class DistributorListScreen extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
       body: balancesAsync.when(
-        data: (balances) {
-          if (balances.isEmpty) return _emptyState(context, ref);
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(distributorBalancesProvider),
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 80),
-              itemCount: balances.length,
-              itemBuilder: (ctx, i) => _buildCard(context, balances[i], ref),
-            ),
+        data: (all) {
+          final list = _query.isEmpty ? all : all.where((b) =>
+            b.distributor.name.toLowerCase().contains(_query) ||
+            (b.distributor.company?.toLowerCase().contains(_query) ?? false)
+          ).toList();
+          return Column(
+            children: [
+              _buildSearch(),
+              Expanded(child: list.isEmpty ? _emptyState(context, ref) : _buildList(list, ref)),
+            ],
           );
         },
         error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+
+  Widget _buildSearch() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _query = v.toLowerCase()),
+        decoration: InputDecoration(
+          hintText: 'Search suppliers...',
+          prefixIcon: const Icon(Icons.search, size: 22),
+          suffixIcon: _query.isNotEmpty
+              ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () { _searchCtrl.clear(); setState(() => _query = ''); })
+              : null,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(List<DistributorBalance> list, WidgetRef ref) {
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(distributorBalancesProvider),
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 4, bottom: 80),
+        itemCount: list.length,
+        itemBuilder: (ctx, i) => _buildCard(context, list[i], ref),
       ),
     );
   }
@@ -161,16 +206,19 @@ class DistributorListScreen extends ConsumerWidget {
         children: [
           Icon(Icons.business_outlined, size: 72, color: AppColors.textSecondary.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
-          const Text('No suppliers yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
-              ref.invalidate(distributorBalancesProvider);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Supplier'),
-          ),
+          Text(_query.isNotEmpty ? 'No suppliers match your search' : 'No suppliers yet',
+              style: const TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+          if (_query.isEmpty) ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
+                ref.invalidate(distributorBalancesProvider);
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Supplier'),
+            ),
+          ],
         ],
       ),
     );

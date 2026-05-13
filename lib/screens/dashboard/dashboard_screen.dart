@@ -5,7 +5,6 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../distributors/distributor_detail_screen.dart';
 import '../distributors/add_distributor_screen.dart';
-import '../bills/bill_detail_screen.dart';
 
 final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   final db = ref.watch(databaseProvider);
@@ -72,7 +71,16 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: AppColors.accent),
+              SizedBox(height: 16),
+              Text('Loading...', style: TextStyle(color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
         error: (e, _) => Center(child: Text('$e')),
       ),
     );
