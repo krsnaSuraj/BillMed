@@ -28,3 +28,15 @@ class Payments extends Table {
   TextColumn get notes => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+class BankTransactions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get txnDate => dateTime()();
+  TextColumn get description => text()();
+  RealColumn get debit => real().withDefault(const Constant(0))();
+  RealColumn get credit => real().withDefault(const Constant(0))();
+  RealColumn get balance => real().withDefault(const Constant(0))();
+  TextColumn get sourceFile => text().nullable()();
+  TextColumn get category => text().nullable()();
+  DateTimeColumn get importedAt => dateTime().withDefault(currentDateAndTime)();
+}

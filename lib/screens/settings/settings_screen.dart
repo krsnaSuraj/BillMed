@@ -7,6 +7,7 @@ import '../../services/export_service.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
 import '../reports/reports_screen.dart';
+import '../bank_import/bank_import_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -114,6 +115,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: const Text('Summary & distributor breakdown'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.account_balance, color: AppColors.accent),
+              title: const Text('Import Bank Statement'),
+              subtitle: const Text('Parse PDF & import transactions'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankImportScreen())),
             ),
           ]),
           _section('Backup & Export', [

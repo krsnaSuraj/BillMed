@@ -7,12 +7,24 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Distributors, Bills, Payments])
+@DriftDatabase(tables: [Distributors, Bills, Payments, BankTransactions])
 class BillMedDatabase extends _$BillMedDatabase {
   BillMedDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(bankTransactions);
+      }
+    },
+  );
 
   static LazyDatabase _openConnection() {
     return LazyDatabase(() async {
@@ -103,5 +115,17 @@ class BillMedDatabase extends _$BillMedDatabase {
       final paid = paidMap[b.id] ?? 0.0;
       return paid < b.amount;
     }).toList();
+  }
+
+  // Bank Transactions CRUD
+  Future<int> addBankTransaction(BankTransactionsCompanion entry) =>
+      into(bankTransactions).insert(entry);
+
+  Future<List<BankTransaction>> getAllBankTransactions() =>
+      select(bankTransactions).get();
+
+  Future<int> deleteAllBankTransactions() async {
+    await delete(bankTransactions).go();
+    return 0;
   }
 }

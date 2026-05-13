@@ -1094,18 +1094,482 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
   }
 }
 
+class $BankTransactionsTable extends BankTransactions
+    with TableInfo<$BankTransactionsTable, BankTransaction> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BankTransactionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _txnDateMeta =
+      const VerificationMeta('txnDate');
+  @override
+  late final GeneratedColumn<DateTime> txnDate = GeneratedColumn<DateTime>(
+      'txn_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _descriptionMeta =
+      const VerificationMeta('description');
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+      'description', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _debitMeta = const VerificationMeta('debit');
+  @override
+  late final GeneratedColumn<double> debit = GeneratedColumn<double>(
+      'debit', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _creditMeta = const VerificationMeta('credit');
+  @override
+  late final GeneratedColumn<double> credit = GeneratedColumn<double>(
+      'credit', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _balanceMeta =
+      const VerificationMeta('balance');
+  @override
+  late final GeneratedColumn<double> balance = GeneratedColumn<double>(
+      'balance', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _sourceFileMeta =
+      const VerificationMeta('sourceFile');
+  @override
+  late final GeneratedColumn<String> sourceFile = GeneratedColumn<String>(
+      'source_file', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _categoryMeta =
+      const VerificationMeta('category');
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+      'category', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _importedAtMeta =
+      const VerificationMeta('importedAt');
+  @override
+  late final GeneratedColumn<DateTime> importedAt = GeneratedColumn<DateTime>(
+      'imported_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        txnDate,
+        description,
+        debit,
+        credit,
+        balance,
+        sourceFile,
+        category,
+        importedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bank_transactions';
+  @override
+  VerificationContext validateIntegrity(Insertable<BankTransaction> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('txn_date')) {
+      context.handle(_txnDateMeta,
+          txnDate.isAcceptableOrUnknown(data['txn_date']!, _txnDateMeta));
+    } else if (isInserting) {
+      context.missing(_txnDateMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+          _descriptionMeta,
+          description.isAcceptableOrUnknown(
+              data['description']!, _descriptionMeta));
+    } else if (isInserting) {
+      context.missing(_descriptionMeta);
+    }
+    if (data.containsKey('debit')) {
+      context.handle(
+          _debitMeta, debit.isAcceptableOrUnknown(data['debit']!, _debitMeta));
+    }
+    if (data.containsKey('credit')) {
+      context.handle(_creditMeta,
+          credit.isAcceptableOrUnknown(data['credit']!, _creditMeta));
+    }
+    if (data.containsKey('balance')) {
+      context.handle(_balanceMeta,
+          balance.isAcceptableOrUnknown(data['balance']!, _balanceMeta));
+    }
+    if (data.containsKey('source_file')) {
+      context.handle(
+          _sourceFileMeta,
+          sourceFile.isAcceptableOrUnknown(
+              data['source_file']!, _sourceFileMeta));
+    }
+    if (data.containsKey('category')) {
+      context.handle(_categoryMeta,
+          category.isAcceptableOrUnknown(data['category']!, _categoryMeta));
+    }
+    if (data.containsKey('imported_at')) {
+      context.handle(
+          _importedAtMeta,
+          importedAt.isAcceptableOrUnknown(
+              data['imported_at']!, _importedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BankTransaction map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BankTransaction(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      txnDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}txn_date'])!,
+      description: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}description'])!,
+      debit: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}debit'])!,
+      credit: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}credit'])!,
+      balance: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}balance'])!,
+      sourceFile: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}source_file']),
+      category: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}category']),
+      importedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}imported_at'])!,
+    );
+  }
+
+  @override
+  $BankTransactionsTable createAlias(String alias) {
+    return $BankTransactionsTable(attachedDatabase, alias);
+  }
+}
+
+class BankTransaction extends DataClass implements Insertable<BankTransaction> {
+  final int id;
+  final DateTime txnDate;
+  final String description;
+  final double debit;
+  final double credit;
+  final double balance;
+  final String? sourceFile;
+  final String? category;
+  final DateTime importedAt;
+  const BankTransaction(
+      {required this.id,
+      required this.txnDate,
+      required this.description,
+      required this.debit,
+      required this.credit,
+      required this.balance,
+      this.sourceFile,
+      this.category,
+      required this.importedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['txn_date'] = Variable<DateTime>(txnDate);
+    map['description'] = Variable<String>(description);
+    map['debit'] = Variable<double>(debit);
+    map['credit'] = Variable<double>(credit);
+    map['balance'] = Variable<double>(balance);
+    if (!nullToAbsent || sourceFile != null) {
+      map['source_file'] = Variable<String>(sourceFile);
+    }
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
+    }
+    map['imported_at'] = Variable<DateTime>(importedAt);
+    return map;
+  }
+
+  BankTransactionsCompanion toCompanion(bool nullToAbsent) {
+    return BankTransactionsCompanion(
+      id: Value(id),
+      txnDate: Value(txnDate),
+      description: Value(description),
+      debit: Value(debit),
+      credit: Value(credit),
+      balance: Value(balance),
+      sourceFile: sourceFile == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceFile),
+      category: category == null && nullToAbsent
+          ? const Value.absent()
+          : Value(category),
+      importedAt: Value(importedAt),
+    );
+  }
+
+  factory BankTransaction.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BankTransaction(
+      id: serializer.fromJson<int>(json['id']),
+      txnDate: serializer.fromJson<DateTime>(json['txnDate']),
+      description: serializer.fromJson<String>(json['description']),
+      debit: serializer.fromJson<double>(json['debit']),
+      credit: serializer.fromJson<double>(json['credit']),
+      balance: serializer.fromJson<double>(json['balance']),
+      sourceFile: serializer.fromJson<String?>(json['sourceFile']),
+      category: serializer.fromJson<String?>(json['category']),
+      importedAt: serializer.fromJson<DateTime>(json['importedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'txnDate': serializer.toJson<DateTime>(txnDate),
+      'description': serializer.toJson<String>(description),
+      'debit': serializer.toJson<double>(debit),
+      'credit': serializer.toJson<double>(credit),
+      'balance': serializer.toJson<double>(balance),
+      'sourceFile': serializer.toJson<String?>(sourceFile),
+      'category': serializer.toJson<String?>(category),
+      'importedAt': serializer.toJson<DateTime>(importedAt),
+    };
+  }
+
+  BankTransaction copyWith(
+          {int? id,
+          DateTime? txnDate,
+          String? description,
+          double? debit,
+          double? credit,
+          double? balance,
+          Value<String?> sourceFile = const Value.absent(),
+          Value<String?> category = const Value.absent(),
+          DateTime? importedAt}) =>
+      BankTransaction(
+        id: id ?? this.id,
+        txnDate: txnDate ?? this.txnDate,
+        description: description ?? this.description,
+        debit: debit ?? this.debit,
+        credit: credit ?? this.credit,
+        balance: balance ?? this.balance,
+        sourceFile: sourceFile.present ? sourceFile.value : this.sourceFile,
+        category: category.present ? category.value : this.category,
+        importedAt: importedAt ?? this.importedAt,
+      );
+  BankTransaction copyWithCompanion(BankTransactionsCompanion data) {
+    return BankTransaction(
+      id: data.id.present ? data.id.value : this.id,
+      txnDate: data.txnDate.present ? data.txnDate.value : this.txnDate,
+      description:
+          data.description.present ? data.description.value : this.description,
+      debit: data.debit.present ? data.debit.value : this.debit,
+      credit: data.credit.present ? data.credit.value : this.credit,
+      balance: data.balance.present ? data.balance.value : this.balance,
+      sourceFile:
+          data.sourceFile.present ? data.sourceFile.value : this.sourceFile,
+      category: data.category.present ? data.category.value : this.category,
+      importedAt:
+          data.importedAt.present ? data.importedAt.value : this.importedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BankTransaction(')
+          ..write('id: $id, ')
+          ..write('txnDate: $txnDate, ')
+          ..write('description: $description, ')
+          ..write('debit: $debit, ')
+          ..write('credit: $credit, ')
+          ..write('balance: $balance, ')
+          ..write('sourceFile: $sourceFile, ')
+          ..write('category: $category, ')
+          ..write('importedAt: $importedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, txnDate, description, debit, credit,
+      balance, sourceFile, category, importedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BankTransaction &&
+          other.id == this.id &&
+          other.txnDate == this.txnDate &&
+          other.description == this.description &&
+          other.debit == this.debit &&
+          other.credit == this.credit &&
+          other.balance == this.balance &&
+          other.sourceFile == this.sourceFile &&
+          other.category == this.category &&
+          other.importedAt == this.importedAt);
+}
+
+class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
+  final Value<int> id;
+  final Value<DateTime> txnDate;
+  final Value<String> description;
+  final Value<double> debit;
+  final Value<double> credit;
+  final Value<double> balance;
+  final Value<String?> sourceFile;
+  final Value<String?> category;
+  final Value<DateTime> importedAt;
+  const BankTransactionsCompanion({
+    this.id = const Value.absent(),
+    this.txnDate = const Value.absent(),
+    this.description = const Value.absent(),
+    this.debit = const Value.absent(),
+    this.credit = const Value.absent(),
+    this.balance = const Value.absent(),
+    this.sourceFile = const Value.absent(),
+    this.category = const Value.absent(),
+    this.importedAt = const Value.absent(),
+  });
+  BankTransactionsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime txnDate,
+    required String description,
+    this.debit = const Value.absent(),
+    this.credit = const Value.absent(),
+    this.balance = const Value.absent(),
+    this.sourceFile = const Value.absent(),
+    this.category = const Value.absent(),
+    this.importedAt = const Value.absent(),
+  })  : txnDate = Value(txnDate),
+        description = Value(description);
+  static Insertable<BankTransaction> custom({
+    Expression<int>? id,
+    Expression<DateTime>? txnDate,
+    Expression<String>? description,
+    Expression<double>? debit,
+    Expression<double>? credit,
+    Expression<double>? balance,
+    Expression<String>? sourceFile,
+    Expression<String>? category,
+    Expression<DateTime>? importedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (txnDate != null) 'txn_date': txnDate,
+      if (description != null) 'description': description,
+      if (debit != null) 'debit': debit,
+      if (credit != null) 'credit': credit,
+      if (balance != null) 'balance': balance,
+      if (sourceFile != null) 'source_file': sourceFile,
+      if (category != null) 'category': category,
+      if (importedAt != null) 'imported_at': importedAt,
+    });
+  }
+
+  BankTransactionsCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? txnDate,
+      Value<String>? description,
+      Value<double>? debit,
+      Value<double>? credit,
+      Value<double>? balance,
+      Value<String?>? sourceFile,
+      Value<String?>? category,
+      Value<DateTime>? importedAt}) {
+    return BankTransactionsCompanion(
+      id: id ?? this.id,
+      txnDate: txnDate ?? this.txnDate,
+      description: description ?? this.description,
+      debit: debit ?? this.debit,
+      credit: credit ?? this.credit,
+      balance: balance ?? this.balance,
+      sourceFile: sourceFile ?? this.sourceFile,
+      category: category ?? this.category,
+      importedAt: importedAt ?? this.importedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (txnDate.present) {
+      map['txn_date'] = Variable<DateTime>(txnDate.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (debit.present) {
+      map['debit'] = Variable<double>(debit.value);
+    }
+    if (credit.present) {
+      map['credit'] = Variable<double>(credit.value);
+    }
+    if (balance.present) {
+      map['balance'] = Variable<double>(balance.value);
+    }
+    if (sourceFile.present) {
+      map['source_file'] = Variable<String>(sourceFile.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (importedAt.present) {
+      map['imported_at'] = Variable<DateTime>(importedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BankTransactionsCompanion(')
+          ..write('id: $id, ')
+          ..write('txnDate: $txnDate, ')
+          ..write('description: $description, ')
+          ..write('debit: $debit, ')
+          ..write('credit: $credit, ')
+          ..write('balance: $balance, ')
+          ..write('sourceFile: $sourceFile, ')
+          ..write('category: $category, ')
+          ..write('importedAt: $importedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$BillMedDatabase extends GeneratedDatabase {
   _$BillMedDatabase(QueryExecutor e) : super(e);
   $BillMedDatabaseManager get managers => $BillMedDatabaseManager(this);
   late final $DistributorsTable distributors = $DistributorsTable(this);
   late final $BillsTable bills = $BillsTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
+  late final $BankTransactionsTable bankTransactions =
+      $BankTransactionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [distributors, bills, payments];
+      [distributors, bills, payments, bankTransactions];
 }
 
 typedef $$DistributorsTableCreateCompanionBuilder = DistributorsCompanion
@@ -2030,6 +2494,234 @@ typedef $$PaymentsTableProcessedTableManager = ProcessedTableManager<
     (Payment, $$PaymentsTableReferences),
     Payment,
     PrefetchHooks Function({bool billId})>;
+typedef $$BankTransactionsTableCreateCompanionBuilder
+    = BankTransactionsCompanion Function({
+  Value<int> id,
+  required DateTime txnDate,
+  required String description,
+  Value<double> debit,
+  Value<double> credit,
+  Value<double> balance,
+  Value<String?> sourceFile,
+  Value<String?> category,
+  Value<DateTime> importedAt,
+});
+typedef $$BankTransactionsTableUpdateCompanionBuilder
+    = BankTransactionsCompanion Function({
+  Value<int> id,
+  Value<DateTime> txnDate,
+  Value<String> description,
+  Value<double> debit,
+  Value<double> credit,
+  Value<double> balance,
+  Value<String?> sourceFile,
+  Value<String?> category,
+  Value<DateTime> importedAt,
+});
+
+class $$BankTransactionsTableFilterComposer
+    extends Composer<_$BillMedDatabase, $BankTransactionsTable> {
+  $$BankTransactionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get txnDate => $composableBuilder(
+      column: $table.txnDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get debit => $composableBuilder(
+      column: $table.debit, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get credit => $composableBuilder(
+      column: $table.credit, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get balance => $composableBuilder(
+      column: $table.balance, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get sourceFile => $composableBuilder(
+      column: $table.sourceFile, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get category => $composableBuilder(
+      column: $table.category, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get importedAt => $composableBuilder(
+      column: $table.importedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$BankTransactionsTableOrderingComposer
+    extends Composer<_$BillMedDatabase, $BankTransactionsTable> {
+  $$BankTransactionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get txnDate => $composableBuilder(
+      column: $table.txnDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get debit => $composableBuilder(
+      column: $table.debit, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get credit => $composableBuilder(
+      column: $table.credit, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get balance => $composableBuilder(
+      column: $table.balance, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get sourceFile => $composableBuilder(
+      column: $table.sourceFile, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get category => $composableBuilder(
+      column: $table.category, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get importedAt => $composableBuilder(
+      column: $table.importedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$BankTransactionsTableAnnotationComposer
+    extends Composer<_$BillMedDatabase, $BankTransactionsTable> {
+  $$BankTransactionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get txnDate =>
+      $composableBuilder(column: $table.txnDate, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => column);
+
+  GeneratedColumn<double> get debit =>
+      $composableBuilder(column: $table.debit, builder: (column) => column);
+
+  GeneratedColumn<double> get credit =>
+      $composableBuilder(column: $table.credit, builder: (column) => column);
+
+  GeneratedColumn<double> get balance =>
+      $composableBuilder(column: $table.balance, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceFile => $composableBuilder(
+      column: $table.sourceFile, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get importedAt => $composableBuilder(
+      column: $table.importedAt, builder: (column) => column);
+}
+
+class $$BankTransactionsTableTableManager extends RootTableManager<
+    _$BillMedDatabase,
+    $BankTransactionsTable,
+    BankTransaction,
+    $$BankTransactionsTableFilterComposer,
+    $$BankTransactionsTableOrderingComposer,
+    $$BankTransactionsTableAnnotationComposer,
+    $$BankTransactionsTableCreateCompanionBuilder,
+    $$BankTransactionsTableUpdateCompanionBuilder,
+    (
+      BankTransaction,
+      BaseReferences<_$BillMedDatabase, $BankTransactionsTable, BankTransaction>
+    ),
+    BankTransaction,
+    PrefetchHooks Function()> {
+  $$BankTransactionsTableTableManager(
+      _$BillMedDatabase db, $BankTransactionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BankTransactionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BankTransactionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BankTransactionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> txnDate = const Value.absent(),
+            Value<String> description = const Value.absent(),
+            Value<double> debit = const Value.absent(),
+            Value<double> credit = const Value.absent(),
+            Value<double> balance = const Value.absent(),
+            Value<String?> sourceFile = const Value.absent(),
+            Value<String?> category = const Value.absent(),
+            Value<DateTime> importedAt = const Value.absent(),
+          }) =>
+              BankTransactionsCompanion(
+            id: id,
+            txnDate: txnDate,
+            description: description,
+            debit: debit,
+            credit: credit,
+            balance: balance,
+            sourceFile: sourceFile,
+            category: category,
+            importedAt: importedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime txnDate,
+            required String description,
+            Value<double> debit = const Value.absent(),
+            Value<double> credit = const Value.absent(),
+            Value<double> balance = const Value.absent(),
+            Value<String?> sourceFile = const Value.absent(),
+            Value<String?> category = const Value.absent(),
+            Value<DateTime> importedAt = const Value.absent(),
+          }) =>
+              BankTransactionsCompanion.insert(
+            id: id,
+            txnDate: txnDate,
+            description: description,
+            debit: debit,
+            credit: credit,
+            balance: balance,
+            sourceFile: sourceFile,
+            category: category,
+            importedAt: importedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$BankTransactionsTableProcessedTableManager = ProcessedTableManager<
+    _$BillMedDatabase,
+    $BankTransactionsTable,
+    BankTransaction,
+    $$BankTransactionsTableFilterComposer,
+    $$BankTransactionsTableOrderingComposer,
+    $$BankTransactionsTableAnnotationComposer,
+    $$BankTransactionsTableCreateCompanionBuilder,
+    $$BankTransactionsTableUpdateCompanionBuilder,
+    (
+      BankTransaction,
+      BaseReferences<_$BillMedDatabase, $BankTransactionsTable, BankTransaction>
+    ),
+    BankTransaction,
+    PrefetchHooks Function()>;
 
 class $BillMedDatabaseManager {
   final _$BillMedDatabase _db;
@@ -2040,4 +2732,6 @@ class $BillMedDatabaseManager {
       $$BillsTableTableManager(_db, _db.bills);
   $$PaymentsTableTableManager get payments =>
       $$PaymentsTableTableManager(_db, _db.payments);
+  $$BankTransactionsTableTableManager get bankTransactions =>
+      $$BankTransactionsTableTableManager(_db, _db.bankTransactions);
 }
