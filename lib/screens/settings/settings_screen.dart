@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/theme_provider.dart';
-import '../../theme/app_theme.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../providers/database_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../services/export_service.dart';
+import '../../theme/app_theme.dart';
+import '../reports/reports_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +16,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _version = '';
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -25,6 +29,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _version = '${info.version}+${info.buildNumber}');
   }
 
+  Future<void> _export(String type) async {
+    setState(() => _exporting = true);
+    try {
+      final db = ref.read(databaseProvider);
+      await ExportService.exportToCsv(db, type: type);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
@@ -35,36 +49,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         children: [
-          _buildSection(context, 'Appearance', [
+          _section('Appearance', [
             SwitchListTile(
               title: const Text('Dark Mode'),
               subtitle: const Text('Switch to dark theme'),
-              secondary: Icon(
-                isDark ? Icons.dark_mode : Icons.light_mode,
-                color: isDark ? AppColors.warning : AppColors.info,
-              ),
+              secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: isDark ? AppColors.warning : AppColors.info),
               value: isDark,
               activeColor: AppColors.accent,
-              onChanged: (v) {
-                ref.read(themeModeProvider.notifier).state =
-                    v ? ThemeMode.dark : ThemeMode.light;
-              },
+              onChanged: (v) => ref.read(themeModeProvider.notifier).state = v ? ThemeMode.dark : ThemeMode.light,
             ),
           ]),
-          _buildSection(context, 'Data', [
+          _section('Reports', [
+            ListTile(
+              leading: const Icon(Icons.bar_chart, color: AppColors.info),
+              title: const Text('View Reports'),
+              subtitle: const Text('Summary & distributor breakdown'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen())),
+            ),
+          ]),
+          _section('Backup & Export', [
             ListTile(
               leading: const Icon(Icons.backup, color: AppColors.accent),
               title: const Text('Auto Backup'),
-              subtitle: const Text('Enabled (Google Drive)'),
+              subtitle: const Text('Android Auto Backup (Google Drive)'),
             ),
             ListTile(
-              leading: const Icon(Icons.file_download_outlined, color: AppColors.info),
-              title: const Text('Export Data'),
-              subtitle: const Text('CSV / Excel format'),
-              trailing: const Icon(Icons.chevron_right),
+              leading: Icon(Icons.file_download, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              title: const Text('Export Distributors'),
+              subtitle: const Text('CSV file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _export('distributors'),
+            ),
+            ListTile(
+              leading: Icon(Icons.receipt_long, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              title: const Text('Export Bills'),
+              subtitle: const Text('CSV file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _export('bills'),
+            ),
+            ListTile(
+              leading: Icon(Icons.payment, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              title: const Text('Export Payments'),
+              subtitle: const Text('CSV file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _export('payments'),
+            ),
+            ListTile(
+              leading: Icon(Icons.file_download_done, color: _exporting ? AppColors.textSecondary : AppColors.success),
+              title: const Text('Export All Data'),
+              subtitle: const Text('Distributors + Bills + Payments'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _export('all'),
             ),
           ]),
-          _buildSection(context, 'About', [
+          _section('About', [
             ListTile(
               leading: const Icon(Icons.info_outline, color: AppColors.accent),
               title: const Text('Version'),
@@ -72,8 +111,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.code, color: AppColors.textSecondary),
-              title: const Text('Built with Flutter'),
-              subtitle: const Text('Drift + Riverpod'),
+              title: const Text('Built with'),
+              subtitle: const Text('Flutter · Drift · Riverpod'),
             ),
           ]),
         ],
@@ -81,23 +120,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildSection(BuildContext context, String title, List<Widget> items) {
+  Widget _section(String title, List<Widget> tiles) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
+          child: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.accent, letterSpacing: 0.5)),
         ),
         Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Column(children: items),
+          child: Column(children: tiles),
         ),
       ],
     );

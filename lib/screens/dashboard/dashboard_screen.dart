@@ -6,6 +6,7 @@ import '../../database/daos.dart';
 import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../distributors/distributor_detail_screen.dart';
+import '../distributors/add_distributor_screen.dart';
 
 final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   final db = ref.watch(databaseProvider);
@@ -213,7 +214,7 @@ class DashboardScreen extends ConsumerWidget {
           ElevatedButton.icon(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const Scaffold(body: Center(child: Text('Add from Suppliers tab')))),
+              MaterialPageRoute(builder: (_) => const AddDistributorScreen()),
             ),
             icon: const Icon(Icons.add),
             label: const Text('Add Distributor'),
