@@ -20,10 +20,14 @@ class ExportService {
       case 'payments':
         await _exportPayments(db, dir, ts);
         break;
+      case 'bank':
+        await _exportBankTransactions(db, dir, ts);
+        break;
       case 'all':
         await _exportDistributors(db, dir, ts);
         await _exportBills(db, dir, ts);
         await _exportPayments(db, dir, ts);
+        await _exportBankTransactions(db, dir, ts);
         break;
     }
   }
@@ -79,6 +83,26 @@ class ExportService {
         ],
     ];
     _writeAndShare(dir, 'BillMed_Payments_$ts.csv', rows);
+  }
+
+  static Future<void> _exportBankTransactions(BillMedDatabase db, Directory dir, String ts) async {
+    final data = await db.getAllBankTransactions();
+    final rows = <List<String>>[
+      ['ID', 'Date', 'Description', 'Debit', 'Credit', 'Balance', 'Source File', 'Category', 'Imported At'],
+      for (final t in data)
+        [
+          t.id.toString(),
+          '${t.txnDate.year}-${t.txnDate.month.toString().padLeft(2, '0')}-${t.txnDate.day.toString().padLeft(2, '0')}',
+          t.description,
+          t.debit.toStringAsFixed(2),
+          t.credit.toStringAsFixed(2),
+          t.balance.toStringAsFixed(2),
+          t.sourceFile ?? '',
+          t.category ?? '',
+          t.importedAt.toIso8601String(),
+        ],
+    ];
+    _writeAndShare(dir, 'BillMed_BankTransactions_$ts.csv', rows);
   }
 
   static Future<void> _writeAndShare(Directory dir, String filename, List<List<String>> rows) async {

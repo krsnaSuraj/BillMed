@@ -122,6 +122,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankImportScreen())),
             ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet, color: AppColors.info),
+              title: const Text('View Bank Transactions'),
+              subtitle: const Text('Imported transaction history'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const Scaffold(
+                body: Center(child: Text('Coming soon - Bank transaction viewer')),
+              ))),
+            ),
           ]),
           _section('Backup & Export', [
             ListTile(
@@ -163,6 +172,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: const Text('CSV file'),
               trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
               onTap: _exporting ? null : () => _export('payments'),
+            ),
+            ListTile(
+              leading: Icon(Icons.account_balance, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              title: const Text('Export Bank Transactions'),
+              subtitle: const Text('CSV file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _export('bank'),
             ),
             ListTile(
               leading: Icon(Icons.file_download_done, color: _exporting ? AppColors.textSecondary : AppColors.success),
