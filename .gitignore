@@ -48,3 +48,6 @@ coverage/
 
 # Debug symbols (obfuscation mapping)
 debug-info/
+
+# Utility scripts
+tool/
