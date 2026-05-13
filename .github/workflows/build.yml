@@ -1,0 +1,49 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.41.5'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate database code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Get version
+        id: version
+        run: echo "tag=$(date +'v%Y%m%d.%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Build ${{ steps.version.outputs.tag }}
+          body: |
+            Auto-built APK
+            Commit: ${{ github.sha }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: false
