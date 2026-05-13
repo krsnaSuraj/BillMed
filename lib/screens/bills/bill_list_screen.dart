@@ -5,6 +5,8 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import 'add_bill_screen.dart';
 import 'bill_detail_screen.dart';
+import '../scanner/bill_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 
 final allBillsProvider = FutureProvider<List<Bill>>((ref) async {
   final db = ref.watch(databaseProvider);
@@ -44,6 +46,49 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
     if (mounted) setState(() => _paidMap = map);
   }
 
+  Future<void> _scanBill(BuildContext context) async {
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Scan Bill'),
+        content: const Text('Choose image source:'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, ImageSource.camera), child: const Text('Camera')),
+          TextButton(onPressed: () => Navigator.pop(ctx, ImageSource.gallery), child: const Text('Gallery')),
+        ],
+      ),
+    );
+    if (source == null || !context.mounted) return;
+
+    BillScanResult? result;
+    if (source == ImageSource.camera) {
+      result = await BillScanner.scanFromCamera(context);
+    } else {
+      result = await BillScanner.scanFromGallery(context);
+    }
+
+    if (result == null || !context.mounted) return;
+
+    final confirmed = await Navigator.push<BillScanResult>(
+      context,
+      MaterialPageRoute(builder: (_) => ScanPreviewScreen(result: result!)),
+    );
+
+    if (confirmed != null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddBillScreen(
+            prefillNumber: confirmed.billNumber,
+            prefillAmount: confirmed.amount,
+            prefillDate: confirmed.billDate,
+            prefillDistributor: confirmed.distributorName,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -56,7 +101,16 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
     final distMapAsync = ref.watch(distributorsMapProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bills')),
+      appBar: AppBar(
+        title: const Text('Bills'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner),
+            tooltip: 'Scan Bill',
+            onPressed: () => _scanBill(context),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBillScreen()));

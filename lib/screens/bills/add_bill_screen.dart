@@ -6,7 +6,19 @@ import '../../providers/database_provider.dart';
 
 class AddBillScreen extends ConsumerStatefulWidget {
   final int? distributorId;
-  const AddBillScreen({super.key, this.distributorId});
+  final String? prefillNumber;
+  final double? prefillAmount;
+  final DateTime? prefillDate;
+  final String? prefillDistributor;
+
+  const AddBillScreen({
+    super.key,
+    this.distributorId,
+    this.prefillNumber,
+    this.prefillAmount,
+    this.prefillDate,
+    this.prefillDistributor,
+  });
 
   @override
   ConsumerState<AddBillScreen> createState() => _AddBillScreenState();
@@ -17,7 +29,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
   final _billNoCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
-  DateTime _billDate = DateTime.now();
+  late DateTime _billDate;
   int? _selectedDistributorId;
   bool _saving = false;
 
@@ -25,6 +37,12 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
   void initState() {
     super.initState();
     _selectedDistributorId = widget.distributorId;
+    _billDate = widget.prefillDate ?? DateTime.now();
+    if (widget.prefillNumber != null) _billNoCtrl.text = widget.prefillNumber!;
+    if (widget.prefillAmount != null) _amountCtrl.text = widget.prefillAmount!.toStringAsFixed(0);
+    if (widget.prefillDistributor != null) {
+      // Will auto-select distributor on next build
+    }
   }
 
   @override
