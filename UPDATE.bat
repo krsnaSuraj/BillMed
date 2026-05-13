@@ -76,7 +76,7 @@ echo.
 echo OR local build karna hai to:
 echo   flutter pub get
 echo   dart run build_runner build --delete-conflicting-outputs
-echo   flutter build apk --release
+echo   flutter build apk --release --obfuscate --split-debug-info=debug-info
 echo.
 endlocal
 pause
