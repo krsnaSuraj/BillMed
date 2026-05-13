@@ -45,3 +45,6 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Debug symbols (obfuscation mapping)
+debug-info/
