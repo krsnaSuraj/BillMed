@@ -31,6 +31,8 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
   String _searchQuery = '';
   String _statusFilter = 'All';
   String _sortBy = 'Date';
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
   Map<int, double> _paidMap = {};
 
   @override
@@ -125,6 +127,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildDateFilter(),
           _buildFilterChips(),
           _buildSortBar(),
           Expanded(
@@ -179,6 +182,69 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
     );
   }
 
+  Widget _buildDateFilter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) setState(() => _dateFrom = picked);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  labelText: _dateFrom != null ? '${_dateFrom!.day}/${_dateFrom!.month}/${_dateFrom!.year}' : 'From',
+                  prefixIcon: const Icon(Icons.date_range, size: 18),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: Text('—', style: TextStyle(fontSize: 18)),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _dateTo ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) setState(() => _dateTo = picked);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  labelText: _dateTo != null ? '${_dateTo!.day}/${_dateTo!.month}/${_dateTo!.year}' : 'To',
+                  prefixIcon: const Icon(Icons.date_range, size: 18),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ),
+          if (_dateFrom != null || _dateTo != null)
+            IconButton(
+              icon: const Icon(Icons.clear, size: 18),
+              onPressed: () => setState(() { _dateFrom = null; _dateTo = null; }),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterChips() {
     final filters = ['All', 'Unpaid', 'Partial', 'Paid'];
     return Padding(
@@ -219,6 +285,13 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
         final name = distMap[b.distributorId]?.name.toLowerCase() ?? '';
         return b.billNumber.toLowerCase().contains(_searchQuery) || name.contains(_searchQuery);
       }).toList();
+    }
+
+    if (_dateFrom != null) {
+      filtered = filtered.where((b) => b.billDate.isAfter(_dateFrom!.subtract(const Duration(days: 1)))).toList();
+    }
+    if (_dateTo != null) {
+      filtered = filtered.where((b) => b.billDate.isBefore(_dateTo!.add(const Duration(days: 1)))).toList();
     }
 
     switch (_sortBy) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../database/daos.dart';
 import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
@@ -51,6 +52,8 @@ class ReportsScreen extends ConsumerWidget {
               _summaryCard(summary, overdue),
               const SizedBox(height: 12),
               _turnoverCard(turnover, summary.totalAmount),
+              const SizedBox(height: 12),
+              _barChartCard(turnover),
               const SizedBox(height: 12),
               _breakdownCard(summary),
             ],
@@ -116,6 +119,75 @@ class ReportsScreen extends ConsumerWidget {
                   ],
                 ),
               )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _barChartCard(Map<String, double> turnover) {
+    if (turnover.isEmpty) return const SizedBox();
+
+    final entries = turnover.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final maxVal = entries.fold<double>(0, (m, e) => e.value > m ? e.value : m);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Monthly Chart', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Divider(height: 20),
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: maxVal * 1.2,
+                  barTouchData: BarTouchData(enabled: true),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (v, _) {
+                          final i = v.toInt();
+                          if (i < 0 || i >= entries.length) return const SizedBox();
+                          final label = entries[i].key.split('-').last;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(label, style: const TextStyle(fontSize: 9)),
+                          );
+                        },
+                        reservedSize: 22,
+                      ),
+                    ),
+                    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  gridData: FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  barGroups: entries.asMap().entries.map((e) {
+                    return BarChartGroupData(
+                      x: e.key,
+                      barRods: [
+                        BarChartRodData(
+                          toY: e.value.value,
+                          color: AppColors.accent,
+                          width: 16,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
           ],
         ),
       ),

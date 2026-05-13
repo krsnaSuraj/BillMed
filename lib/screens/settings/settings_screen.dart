@@ -87,13 +87,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         children: [
           _section('Appearance', [
-            SwitchListTile(
+            ListTile(
+              leading: Icon(Icons.light_mode, color: themeMode == ThemeMode.light ? AppColors.warning : AppColors.textSecondary),
+              title: const Text('Light Mode'),
+              trailing: themeMode == ThemeMode.light ? const Icon(Icons.check, color: AppColors.accent) : null,
+              onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.light,
+            ),
+            ListTile(
+              leading: Icon(Icons.dark_mode, color: themeMode == ThemeMode.dark ? AppColors.warning : AppColors.textSecondary),
               title: const Text('Dark Mode'),
-              subtitle: const Text('Switch to dark theme'),
-              secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: isDark ? AppColors.warning : AppColors.info),
-              value: isDark,
-              activeColor: AppColors.accent,
-              onChanged: (v) => ref.read(themeModeProvider.notifier).state = v ? ThemeMode.dark : ThemeMode.light,
+              trailing: themeMode == ThemeMode.dark ? const Icon(Icons.check, color: AppColors.accent) : null,
+              onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.dark,
+            ),
+            ListTile(
+              leading: Icon(Icons.settings_brightness, color: themeMode == ThemeMode.system ? AppColors.warning : AppColors.textSecondary),
+              title: const Text('System Default'),
+              subtitle: const Text('Follow device setting'),
+              trailing: themeMode == ThemeMode.system ? const Icon(Icons.check, color: AppColors.accent) : null,
+              onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.system,
             ),
           ]),
           _section('Reports', [

@@ -61,6 +61,7 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 16, bottom: 24),
             children: [
               _buildSummaryGrid(data),
+              _buildCountRow(data),
               _overdueBanner(context, overdueAsync.valueOrNull ?? 0, ref),
               const SizedBox(height: 8),
               _buildRecentHeader(context),
@@ -103,6 +104,41 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCountRow(DashboardSummary data) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          _countChip(Icons.business, '${data.totalDistributors}', 'Suppliers', AppColors.info),
+          const SizedBox(width: 8),
+          _countChip(Icons.receipt, '${data.totalBills}', 'Bills', AppColors.accent),
+          const SizedBox(width: 8),
+          _countChip(Icons.payment, '${data.totalDistributors}', 'Paid', AppColors.success),
+        ],
+      ),
+    );
+  }
+
+  Widget _countChip(IconData icon, String count, String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 4),
+            Text(count, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ],
+        ),
       ),
     );
   }
