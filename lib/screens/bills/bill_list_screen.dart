@@ -28,6 +28,21 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
+  Map<int, double> _paidMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaidMap();
+  }
+
+  Future<void> _loadPaidMap() async {
+    final db = ref.read(databaseProvider);
+    final allBills = await db.getAllBills();
+    if (allBills.isEmpty) return;
+    final map = await db.getTotalPaidForBills(allBills.map((b) => b.id).toList());
+    if (mounted) setState(() => _paidMap = map);
+  }
 
   @override
   void dispose() {
@@ -44,11 +59,11 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
       appBar: AppBar(title: const Text('Bills')),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddBillScreen()),
-          );
-          if (result == true) ref.invalidate(allBillsProvider);
+          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBillScreen()));
+          if (result == true) {
+            ref.invalidate(allBillsProvider);
+            _loadPaidMap();
+          }
         },
         child: const Icon(Icons.add),
       ),
@@ -59,16 +74,18 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
           Expanded(
             child: billsAsync.when(
               data: (bills) {
-                final filtered = _filterBills(bills);
-                if (filtered.isEmpty) {
-                  return _emptyState(context);
-                }
+                final distMap = distMapAsync.valueOrNull ?? {};
+                final filtered = _filterBills(bills, distMap);
+                if (filtered.isEmpty) return _emptyState(context);
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(allBillsProvider),
+                  onRefresh: () async {
+                    ref.invalidate(allBillsProvider);
+                    await _loadPaidMap();
+                  },
                   child: ListView.builder(
                     padding: const EdgeInsets.only(top: 4, bottom: 80),
                     itemCount: filtered.length,
-                    itemBuilder: (ctx, i) => _billCard(context, filtered[i], distMapAsync.valueOrNull ?? {}),
+                    itemBuilder: (ctx, i) => _billCard(context, filtered[i], distMap),
                   ),
                 );
               },
@@ -118,13 +135,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
             child: FilterChip(
               label: Text(f, style: TextStyle(fontSize: 13, color: selected ? Colors.white : null)),
               selected: selected,
-              selectedColor: f == 'Unpaid'
-                  ? AppColors.danger
-                  : f == 'Partial'
-                      ? AppColors.warning
-                      : f == 'Paid'
-                          ? AppColors.success
-                          : AppColors.primary,
+              selectedColor: f == 'Unpaid' ? AppColors.danger : f == 'Partial' ? AppColors.warning : f == 'Paid' ? AppColors.success : AppColors.primary,
               checkmarkColor: Colors.white,
               backgroundColor: Colors.transparent,
               side: BorderSide(color: AppColors.divider),
@@ -136,15 +147,21 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
     );
   }
 
-  List<Bill> _filterBills(List<Bill> bills) {
+  List<Bill> _filterBills(List<Bill> bills, Map<int, Distributor> distMap) {
     var filtered = bills;
     if (_statusFilter != 'All') {
-      // We'll filter after getting paid amounts - for now just show all
-      // In a real implementation, we'd need the paid amounts
+      filtered = filtered.where((b) {
+        final paid = _paidMap[b.id] ?? 0.0;
+        if (_statusFilter == 'Unpaid') return paid <= 0;
+        if (_statusFilter == 'Partial') return paid > 0 && paid < b.amount;
+        if (_statusFilter == 'Paid') return paid >= b.amount;
+        return true;
+      }).toList();
     }
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((b) {
-        return b.billNumber.toLowerCase().contains(_searchQuery);
+        final name = distMap[b.distributorId]?.name.toLowerCase() ?? '';
+        return b.billNumber.toLowerCase().contains(_searchQuery) || name.contains(_searchQuery);
       }).toList();
     }
     filtered.sort((a, b) => b.billDate.compareTo(a.billDate));
@@ -152,16 +169,15 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
   }
 
   Widget _billCard(BuildContext context, Bill bill, Map<int, Distributor> distMap) {
+    final statusColor = _getStatusColor(bill);
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)),
-          );
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)));
           ref.invalidate(allBillsProvider);
+          _loadPaidMap();
         },
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -169,10 +185,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.info.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
               ),
               const SizedBox(width: 12),
@@ -187,12 +200,37 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
                   ],
                 ),
               ),
-              Text('₹${bill.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('₹${bill.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                    child: Text(_statusText(bill), style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color _getStatusColor(Bill bill) {
+    final paid = _paidMap[bill.id] ?? 0.0;
+    if (paid <= 0) return AppColors.danger;
+    if (paid < bill.amount) return AppColors.warning;
+    return AppColors.success;
+  }
+
+  String _statusText(Bill bill) {
+    final paid = _paidMap[bill.id] ?? 0.0;
+    if (paid <= 0) return 'Unpaid';
+    if (paid < bill.amount) return 'Partial';
+    return 'Paid';
   }
 
   Widget _emptyState(BuildContext context) {
@@ -201,21 +239,15 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(hasFilter ? Icons.search_off : Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
+          Icon(hasFilter ? Icons.search_off : Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
           const SizedBox(height: 12),
-          Text(
-            hasFilter ? 'No bills match your search' : 'No bills yet',
-            style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
-          ),
+          Text(hasFilter ? 'No bills match your search' : 'No bills yet', style: const TextStyle(fontSize: 16, color: AppColors.textSecondary)),
           if (!hasFilter) ...[
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddBillScreen()),
-                );
-                if (result == true) ref.invalidate(allBillsProvider);
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBillScreen()));
+                if (result == true) { ref.invalidate(allBillsProvider); _loadPaidMap(); }
               },
               icon: const Icon(Icons.add),
               label: const Text('Add First Bill'),

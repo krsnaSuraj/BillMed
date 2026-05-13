@@ -13,22 +13,11 @@ class StatusBadge extends ConsumerWidget {
 
     return statusAsync.when(
       data: (status) {
-        final color = status == 'Paid'
-            ? AppTheme.successColor
-            : status == 'Partial'
-                ? AppTheme.warningColor
-                : AppTheme.dangerColor;
+        final color = status == 'Paid' ? AppColors.success : status == 'Partial' ? AppColors.warning : AppColors.danger;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(status,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+          child: Text(status, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
         );
       },
       error: (_, __) => const SizedBox(),

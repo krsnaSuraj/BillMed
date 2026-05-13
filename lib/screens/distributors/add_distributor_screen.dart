@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
-import '../../theme/app_theme.dart';
 
 class AddDistributorScreen extends ConsumerStatefulWidget {
   const AddDistributorScreen({super.key});

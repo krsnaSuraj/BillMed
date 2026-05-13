@@ -1,6 +1,4 @@
-import 'package:drift/drift.dart';
 import 'database.dart';
-import 'tables.dart';
 
 class DashboardSummary {
   final int totalDistributors;

@@ -62,7 +62,7 @@ class ReportsScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(d.distributor.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                                Text('${d.billCount} bills', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                Text('${d.billCount} bills', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                               ],
                             ),
                           ),
@@ -90,7 +90,7 @@ class ReportsScreen extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+          Text(label, style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
           Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
         ],
       ),

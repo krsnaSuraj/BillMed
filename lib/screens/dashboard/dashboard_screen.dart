@@ -56,7 +56,7 @@ class DashboardScreen extends ConsumerWidget {
               ...data.distributorBalances.map(
                 (d) => _distributorTile(context, d, ref),
               ),
-              if (data.distributorBalances.isEmpty) _emptyState(context),
+              if (data.distributorBalances.isEmpty) _emptyState(context, ref),
             ],
           ),
         ),
@@ -202,7 +202,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.all(60),
       child: Column(
@@ -212,10 +212,10 @@ class DashboardScreen extends ConsumerWidget {
           const Text('No distributors yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddDistributorScreen()),
-            ),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
+              ref.invalidate(dashboardProvider);
+            },
             icon: const Icon(Icons.add),
             label: const Text('Add Distributor'),
           ),
