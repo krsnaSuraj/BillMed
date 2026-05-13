@@ -10,6 +10,7 @@ class AddBillScreen extends ConsumerStatefulWidget {
   final double? prefillAmount;
   final DateTime? prefillDate;
   final String? prefillDistributor;
+  final Bill? bill;
 
   const AddBillScreen({
     super.key,
@@ -18,6 +19,7 @@ class AddBillScreen extends ConsumerStatefulWidget {
     this.prefillAmount,
     this.prefillDate,
     this.prefillDistributor,
+    this.bill,
   });
 
   @override
@@ -32,6 +34,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
   late DateTime _billDate;
   int? _selectedDistributorId;
   bool _saving = false;
+  bool get _isEditing => widget.bill != null;
 
   @override
   void initState() {
@@ -40,8 +43,14 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
     _billDate = widget.prefillDate ?? DateTime.now();
     if (widget.prefillNumber != null) _billNoCtrl.text = widget.prefillNumber!;
     if (widget.prefillAmount != null) _amountCtrl.text = widget.prefillAmount!.toStringAsFixed(0);
-    if (widget.prefillDistributor != null) {
-      // Will auto-select distributor on next build
+    if (widget.prefillDistributor != null) {}
+
+    if (_isEditing) {
+      _billNoCtrl.text = widget.bill!.billNumber;
+      _amountCtrl.text = widget.bill!.amount.toStringAsFixed(0);
+      _billDate = widget.bill!.billDate;
+      _selectedDistributorId = widget.bill!.distributorId;
+      _notesCtrl.text = widget.bill!.notes ?? '';
     }
   }
 
@@ -58,7 +67,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
     final distributorsAsync = ref.watch(distributorListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Bill')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Bill' : 'Add Bill')),
       body: distributorsAsync.when(
         data: (dists) => SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -133,13 +142,24 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref.read(databaseProvider).addBill(BillsCompanion(
-        distributorId: Value(_selectedDistributorId ?? widget.distributorId!),
-        billNumber: Value(_billNoCtrl.text.trim()),
-        billDate: Value(_billDate),
-        amount: Value(double.parse(_amountCtrl.text.trim())),
-        notes: Value(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
-      ));
+      final db = ref.read(databaseProvider);
+      if (_isEditing) {
+        await db.updateBill(widget.bill!.copyWith(
+          distributorId: _selectedDistributorId ?? widget.distributorId!,
+          billNumber: _billNoCtrl.text.trim(),
+          billDate: _billDate,
+          amount: double.parse(_amountCtrl.text.trim()),
+          notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
+        ));
+      } else {
+        await db.addBill(BillsCompanion(
+          distributorId: Value(_selectedDistributorId ?? widget.distributorId!),
+          billNumber: Value(_billNoCtrl.text.trim()),
+          billDate: Value(_billDate),
+          amount: Value(double.parse(_amountCtrl.text.trim())),
+          notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
+        ));
+      }
       if (mounted) Navigator.pop(context, true);
     } finally {
       if (mounted) setState(() => _saving = false);

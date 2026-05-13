@@ -4,6 +4,7 @@ import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../payments/add_payment_screen.dart';
+import 'add_bill_screen.dart';
 
 final _billProvider = FutureProvider.family<Bill?, int>((ref, id) async {
   final db = ref.watch(databaseProvider);
@@ -27,14 +28,36 @@ class BillDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Bill Details')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)));
-          ref.invalidate(_paymentsProvider(billId));
-          ref.invalidate(paidAmountProvider(billId));
-        },
-        icon: const Icon(Icons.payments_rounded),
-        label: const Text('Add Payment'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'edit',
+            onPressed: () async {
+              final db = ref.read(databaseProvider);
+              final bill = await db.getBill(billId);
+              if (bill != null && context.mounted) {
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(bill: bill)));
+                if (result == true) {
+                  ref.invalidate(_billProvider(billId));
+                  ref.invalidate(_paymentsProvider(billId));
+                  ref.invalidate(paidAmountProvider(billId));
+                }
+              }
+            },
+            child: const Icon(Icons.edit),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.extended(
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)));
+              ref.invalidate(_paymentsProvider(billId));
+              ref.invalidate(paidAmountProvider(billId));
+            },
+            icon: const Icon(Icons.payments_rounded),
+            label: const Text('Add Payment'),
+          ),
+        ],
       ),
       body: billAsync.when(
         data: (bill) {
@@ -174,7 +197,7 @@ class BillDetailScreen extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onLongPress: () => _confirmDeletePayment(context, p, ref),
+        onLongPress: () => _showPaymentOptions(context, p, ref),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -225,6 +248,35 @@ class BillDetailScreen extends ConsumerWidget {
       case 'RTGS': return (Icons.account_balance, AppColors.primary);
       default: return (Icons.payment, AppColors.textSecondary);
     }
+  }
+
+  void _showPaymentOptions(BuildContext context, Payment p, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit, color: AppColors.info),
+              title: const Text('Edit Payment'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId, payment: p)));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: AppColors.danger),
+              title: const Text('Delete Payment'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDeletePayment(context, p, ref);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _confirmDeletePayment(BuildContext context, Payment p, WidgetRef ref) {

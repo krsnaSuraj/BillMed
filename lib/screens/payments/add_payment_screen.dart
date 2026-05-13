@@ -8,7 +8,8 @@ import '../../theme/app_theme.dart';
 
 class AddPaymentScreen extends ConsumerStatefulWidget {
   final int billId;
-  const AddPaymentScreen({super.key, required this.billId});
+  final Payment? payment;
+  const AddPaymentScreen({super.key, required this.billId, this.payment});
 
   @override
   ConsumerState<AddPaymentScreen> createState() => _AddPaymentScreenState();
@@ -19,9 +20,25 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   final _amountCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
-  DateTime _paymentDate = DateTime.now();
-  PaymentMode _selectedMode = PaymentMode.cash;
+  late DateTime _paymentDate;
+  late PaymentMode _selectedMode;
   bool _saving = false;
+  bool get _isEditing => widget.payment != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _paymentDate = DateTime.now();
+    _selectedMode = PaymentMode.cash;
+    if (_isEditing) {
+      final p = widget.payment!;
+      _amountCtrl.text = p.amount.toStringAsFixed(0);
+      _paymentDate = p.paymentDate;
+      _selectedMode = PaymentMode.values.firstWhere((m) => m.label == p.mode, orElse: () => PaymentMode.cash);
+      _referenceCtrl.text = p.referenceNo ?? '';
+      _notesCtrl.text = p.notes ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -34,7 +51,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Payment')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Payment' : 'Add Payment')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -68,29 +85,15 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 items: PaymentMode.values.map((m) {
                   IconData icon;
                   switch (m) {
-                    case PaymentMode.cash:
-                      icon = Icons.money;
-                      break;
-                    case PaymentMode.upi:
-                      icon = Icons.phone_android;
-                      break;
-                    case PaymentMode.cheque:
-                      icon = Icons.receipt;
-                      break;
+                    case PaymentMode.cash: icon = Icons.money;
+                    case PaymentMode.upi: icon = Icons.phone_android;
+                    case PaymentMode.cheque: icon = Icons.receipt;
                     case PaymentMode.neft:
-                    case PaymentMode.rtgs:
-                      icon = Icons.account_balance;
-                      break;
+                    case PaymentMode.rtgs: icon = Icons.account_balance;
                   }
                   return DropdownMenuItem(
                     value: m,
-                    child: Row(
-                      children: [
-                        Icon(icon, size: 20, color: AppColors.accent),
-                        const SizedBox(width: 10),
-                        Text(m.label),
-                      ],
-                    ),
+                    child: Row(children: [Icon(icon, size: 20, color: AppColors.accent), const SizedBox(width: 10), Text(m.label)]),
                   );
                 }).toList(),
                 onChanged: (v) {
@@ -102,11 +105,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 controller: _referenceCtrl,
                 decoration: InputDecoration(
                   labelText: '${_selectedMode.label} Reference',
-                  hintText: _selectedMode == PaymentMode.upi
-                      ? 'UPI transaction ID'
-                      : _selectedMode == PaymentMode.cheque
-                          ? 'Cheque number'
-                          : 'Transaction reference',
+                  hintText: _selectedMode == PaymentMode.upi ? 'UPI transaction ID' : _selectedMode == PaymentMode.cheque ? 'Cheque number' : 'Transaction reference',
                   prefixIcon: const Icon(Icons.tag),
                 ),
               ),
@@ -121,7 +120,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Record Payment'),
+                    : Text(_isEditing ? 'Update Payment' : 'Record Payment'),
               ),
             ],
           ),
@@ -139,14 +138,25 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref.read(databaseProvider).addPayment(PaymentsCompanion(
-        billId: Value(widget.billId),
-        paymentDate: Value(_paymentDate),
-        amount: Value(double.parse(_amountCtrl.text.trim())),
-        mode: Value(_selectedMode.label),
-        referenceNo: Value(_referenceCtrl.text.trim().isEmpty ? null : _referenceCtrl.text.trim()),
-        notes: Value(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
-      ));
+      final db = ref.read(databaseProvider);
+      if (_isEditing) {
+        await db.updatePayment(widget.payment!.copyWith(
+          paymentDate: _paymentDate,
+          amount: double.parse(_amountCtrl.text.trim()),
+          mode: _selectedMode.label,
+          referenceNo: Value<String?>(_referenceCtrl.text.trim().isEmpty ? null : _referenceCtrl.text.trim()),
+          notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
+        ));
+      } else {
+        await db.addPayment(PaymentsCompanion(
+          billId: Value(widget.billId),
+          paymentDate: Value(_paymentDate),
+          amount: Value(double.parse(_amountCtrl.text.trim())),
+          mode: Value(_selectedMode.label),
+          referenceNo: Value<String?>(_referenceCtrl.text.trim().isEmpty ? null : _referenceCtrl.text.trim()),
+          notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
+        ));
+      }
       if (mounted) Navigator.pop(context, true);
     } finally {
       if (mounted) setState(() => _saving = false);

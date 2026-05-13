@@ -30,6 +30,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
+  String _sortBy = 'Date';
   Map<int, double> _paidMap = {};
 
   @override
@@ -125,6 +126,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
         children: [
           _buildSearchBar(),
           _buildFilterChips(),
+          _buildSortBar(),
           Expanded(
             child: billsAsync.when(
               data: (bills) {
@@ -218,8 +220,49 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
         return b.billNumber.toLowerCase().contains(_searchQuery) || name.contains(_searchQuery);
       }).toList();
     }
-    filtered.sort((a, b) => b.billDate.compareTo(a.billDate));
+
+    switch (_sortBy) {
+      case 'Amount':
+        filtered.sort((a, b) => b.amount.compareTo(a.amount));
+        break;
+      case 'Status':
+        filtered.sort((a, b) {
+          final pa = _paidMap[a.id] ?? 0.0;
+          final pb = _paidMap[b.id] ?? 0.0;
+          final sa = pa <= 0 ? 0 : pa < a.amount ? 1 : 2;
+          final sb = pb <= 0 ? 0 : pb < b.amount ? 1 : 2;
+          return sa.compareTo(sb);
+        });
+        break;
+      default:
+        filtered.sort((a, b) => b.billDate.compareTo(a.billDate));
+    }
     return filtered;
+  }
+
+  Widget _buildSortBar() {
+    final sorts = ['Date', 'Amount', 'Status'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Row(
+        children: [
+          const Icon(Icons.sort, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          ...sorts.map((s) {
+            final selected = _sortBy == s;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                label: Text(s, style: TextStyle(fontSize: 12, color: selected ? Colors.white : null)),
+                selected: selected,
+                selectedColor: AppColors.info,
+                onSelected: (_) => setState(() => _sortBy = s),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 
   Widget _billCard(BuildContext context, Bill bill, Map<int, Distributor> distMap) {

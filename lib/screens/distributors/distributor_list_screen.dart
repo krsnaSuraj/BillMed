@@ -59,7 +59,7 @@ class DistributorListScreen extends ConsumerWidget {
           await Navigator.push(context, MaterialPageRoute(builder: (_) => DistributorDetailScreen(distributorId: b.distributor.id)));
           ref.invalidate(distributorBalancesProvider);
         },
-        onLongPress: () => _confirmDelete(context, b.distributor, ref),
+        onLongPress: () => _showOptions(context, b.distributor, ref),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -92,6 +92,35 @@ class DistributorListScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showOptions(BuildContext context, Distributor d, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit, color: AppColors.info),
+              title: const Text('Edit Supplier'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => AddDistributorScreen(distributor: d)));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: AppColors.danger),
+              title: const Text('Delete Supplier'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(context, d, ref);
+              },
+            ),
+          ],
         ),
       ),
     );
