@@ -7,8 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 class UpdateService {
   static const String _repoOwner = 'krsnaSuraj';
   static const String _repoName = 'BillMed';
-  static const String _githubApi =
-      'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest';
+  static const String _releasesUrl =
+      'https://github.com/$_repoOwner/$_repoName/releases/latest';
 
   static Future<void> checkForUpdates(BuildContext context) async {
     try {
@@ -16,7 +16,8 @@ class UpdateService {
       final currentVersion = packageInfo.version;
 
       final response = await http
-          .get(Uri.parse(_githubApi))
+          .get(Uri.parse(
+              'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest'))
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) return;
@@ -31,18 +32,8 @@ class UpdateService {
       if (latestVersion == current) return;
       if (!_isNewer(latestVersion, current)) return;
 
-      final assets = data['assets'] as List? ?? [];
-      String? downloadUrl;
-      for (final asset in assets) {
-        final name = asset['name'] as String? ?? '';
-        if (name.endsWith('.apk')) {
-          downloadUrl = asset['browser_download_url'] as String?;
-          break;
-        }
-      }
-
-      if (context.mounted && downloadUrl != null) {
-        _showUpdateDialog(context, latestVersion, downloadUrl);
+      if (context.mounted) {
+        _showUpdateDialog(context, latestVersion);
       }
     } catch (_) {}
   }
@@ -60,8 +51,7 @@ class UpdateService {
     return false;
   }
 
-  static void _showUpdateDialog(
-      BuildContext context, String version, String downloadUrl) {
+  static void _showUpdateDialog(BuildContext context, String version) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -74,9 +64,8 @@ class UpdateService {
           ],
         ),
         content: Text(
-          'BillMed v$version is ready.\n\n'
-          'Tap Update to download and install.',
-          style: const TextStyle(fontSize: 18),
+          'BillMed v$version is ready.\n\nTap Update to go to the download page.',
+          style: const TextStyle(fontSize: 16),
         ),
         actions: [
           TextButton(
@@ -86,9 +75,15 @@ class UpdateService {
           ElevatedButton.icon(
             onPressed: () async {
               Navigator.pop(ctx);
-              final uri = Uri.parse(downloadUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              final uri = Uri.parse(_releasesUrl);
+              try {
+                await launchUrl(uri,
+                    mode: LaunchMode.externalApplication);
+              } catch (_) {
+                // Fallback: try platform default
+                try {
+                  await launchUrl(uri, mode: LaunchMode.platformDefault);
+                } catch (_) {}
               }
             },
             icon: const Icon(Icons.download),
