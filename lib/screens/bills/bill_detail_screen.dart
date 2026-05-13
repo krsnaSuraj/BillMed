@@ -16,12 +16,6 @@ final _paymentsProvider =
   return db.getPaymentsByBill(billId);
 });
 
-final _paidAmountProvider =
-    FutureProvider.family<double, int>((ref, billId) async {
-  final db = ref.watch(databaseProvider);
-  return db.getTotalPaidForBill(billId);
-});
-
 class BillDetailScreen extends ConsumerWidget {
   final int billId;
   const BillDetailScreen({super.key, required this.billId});
@@ -30,7 +24,7 @@ class BillDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final billAsync = ref.watch(_billProvider(billId));
     final paymentsAsync = ref.watch(_paymentsProvider(billId));
-    final paidAsync = ref.watch(_paidAmountProvider(billId));
+    final paidAsync = ref.watch(paidAmountProvider(billId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Bill Details')),
@@ -43,7 +37,7 @@ class BillDetailScreen extends ConsumerWidget {
             ),
           );
           ref.invalidate(_paymentsProvider(billId));
-          ref.invalidate(_paidAmountProvider(billId));
+          ref.invalidate(paidAmountProvider(billId));
         },
         child: const Icon(Icons.payments_rounded, size: 28),
       ),
@@ -54,11 +48,11 @@ class BillDetailScreen extends ConsumerWidget {
           }
           return Column(
             children: [
-              _buildBillHeader(context, bill, ref, paidAsync),
+              _buildBillHeader(context, bill, paidAsync),
               Expanded(
                 child: paymentsAsync.when(
                   data: (payments) =>
-                      _buildPaymentsList(context, payments, bill),
+                      _buildPaymentsList(context, payments, ref),
                   error: (e, _) => Center(child: Text('Error: $e')),
                   loading: () => const Center(
                       child: CircularProgressIndicator()),
@@ -73,7 +67,7 @@ class BillDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBillHeader(BuildContext context, Bill bill, WidgetRef ref,
+  Widget _buildBillHeader(BuildContext context, Bill bill,
       AsyncValue<double> paidAsync) {
     return Card(
       margin: const EdgeInsets.all(16),
@@ -154,7 +148,7 @@ class BillDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildPaymentsList(
-      BuildContext context, List<Payment> payments, Bill bill) {
+      BuildContext context, List<Payment> payments, WidgetRef ref) {
     if (payments.isEmpty) {
       return Center(
         child: Column(
@@ -185,7 +179,7 @@ class BillDetailScreen extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(_paymentsProvider(billId));
-        ref.invalidate(_paidAmountProvider(billId));
+        ref.invalidate(paidAmountProvider(billId));
       },
       child: ListView.builder(
         padding: const EdgeInsets.only(bottom: 80),

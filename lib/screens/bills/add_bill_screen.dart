@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:drift/drift.dart' hide Column;
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 
@@ -175,4 +176,3 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
     }
   }
 }
-
