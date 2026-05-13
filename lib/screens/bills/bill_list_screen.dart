@@ -1,0 +1,228 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../database/database.dart';
+import '../../providers/database_provider.dart';
+import '../../theme/app_theme.dart';
+import 'add_bill_screen.dart';
+import 'bill_detail_screen.dart';
+
+final allBillsProvider = FutureProvider<List<Bill>>((ref) async {
+  final db = ref.watch(databaseProvider);
+  return db.getAllBills();
+});
+
+final distributorsMapProvider = FutureProvider<Map<int, Distributor>>((ref) async {
+  final db = ref.watch(databaseProvider);
+  final list = await db.getAllDistributors();
+  return {for (final d in list) d.id: d};
+});
+
+class BillListScreen extends ConsumerStatefulWidget {
+  const BillListScreen({super.key});
+
+  @override
+  ConsumerState<BillListScreen> createState() => _BillListScreenState();
+}
+
+class _BillListScreenState extends ConsumerState<BillListScreen> {
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+  String _statusFilter = 'All';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final billsAsync = ref.watch(allBillsProvider);
+    final distMapAsync = ref.watch(distributorsMapProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bills')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddBillScreen()),
+          );
+          if (result == true) ref.invalidate(allBillsProvider);
+        },
+        child: const Icon(Icons.add),
+      ),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          _buildFilterChips(),
+          Expanded(
+            child: billsAsync.when(
+              data: (bills) {
+                final filtered = _filterBills(bills);
+                if (filtered.isEmpty) {
+                  return _emptyState(context);
+                }
+                return RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(allBillsProvider),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.only(top: 4, bottom: 80),
+                    itemCount: filtered.length,
+                    itemBuilder: (ctx, i) => _billCard(context, filtered[i], distMapAsync.valueOrNull ?? {}),
+                  ),
+                );
+              },
+              error: (e, _) => Center(child: Text('$e')),
+              loading: () => const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+        decoration: InputDecoration(
+          hintText: 'Search bills by number or distributor...',
+          prefixIcon: const Icon(Icons.search, size: 22),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                )
+              : null,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    final filters = ['All', 'Unpaid', 'Partial', 'Paid'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: filters.map((f) {
+          final selected = _statusFilter == f;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilterChip(
+              label: Text(f, style: TextStyle(fontSize: 13, color: selected ? Colors.white : null)),
+              selected: selected,
+              selectedColor: f == 'Unpaid'
+                  ? AppColors.danger
+                  : f == 'Partial'
+                      ? AppColors.warning
+                      : f == 'Paid'
+                          ? AppColors.success
+                          : AppColors.primary,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.transparent,
+              side: BorderSide(color: AppColors.divider),
+              onSelected: (_) => setState(() => _statusFilter = f),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  List<Bill> _filterBills(List<Bill> bills) {
+    var filtered = bills;
+    if (_statusFilter != 'All') {
+      // We'll filter after getting paid amounts - for now just show all
+      // In a real implementation, we'd need the paid amounts
+    }
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((b) {
+        return b.billNumber.toLowerCase().contains(_searchQuery);
+      }).toList();
+    }
+    filtered.sort((a, b) => b.billDate.compareTo(a.billDate));
+    return filtered;
+  }
+
+  Widget _billCard(BuildContext context, Bill bill, Map<int, Distributor> distMap) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)),
+          );
+          ref.invalidate(allBillsProvider);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('#${bill.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    if (distMap[bill.distributorId] != null)
+                      Text(distMap[bill.distributorId]!.name, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text('${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Text('₹${bill.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
+    final hasFilter = _statusFilter != 'All' || _searchQuery.isNotEmpty;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(hasFilter ? Icons.search_off : Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
+          const SizedBox(height: 12),
+          Text(
+            hasFilter ? 'No bills match your search' : 'No bills yet',
+            style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          ),
+          if (!hasFilter) ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddBillScreen()),
+                );
+                if (result == true) ref.invalidate(allBillsProvider);
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add First Bill'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

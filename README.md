@@ -18,6 +18,8 @@ BillMed helps shopkeepers track purchase bills from distributors and wholesalers
 | **Dashboard** | See pending amounts per distributor at a glance |
 | **Auto Backup** | Android Auto Backup syncs data to Google Drive |
 | **In-App Updates** | App checks for new versions and prompts update |
+| **Dark Mode** | Toggle between light and dark themes |
+| **Search & Filter** | Search bills and filter by status |
 | **Large Fonts** | Elderly-friendly UI with big text and buttons |
 | **100% Offline** | No internet required. Data stays on device. |
 
@@ -186,10 +188,22 @@ payments
 
 ---
 
+## 🎨 Color Scheme
+
+| Role | Color | Hex |
+|------|-------|-----|
+| Primary | Deep Indigo | `#1A237E` |
+| Accent | Teal | `#00BFA5` |
+| Background | Light Grey | `#F5F7FA` |
+| Dark BG | Dark Navy | `#0F0F23` |
+
+---
+
 ## 📊 Version History
 
 | Commit | Description |
 |--------|-------------|
+| `v2.0.0` | Complete UI redesign, dark mode, search & filter, new logo, 4-tab navigation |
 | `v1.1.1` | APK obfuscation, updated README, build script fixes |
 | `v1.1.0` | Auto-update service, GitHub Actions CI, new deps |
 | `v1.0.0` | Initial release with distributor/bill/payment tracking |

@@ -3,18 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/status_badge.dart';
 import '../bills/add_bill_screen.dart';
 import '../bills/bill_detail_screen.dart';
 
-final _distributorProvider =
-    FutureProvider.family<Distributor?, int>((ref, id) async {
-  final db = ref.watch(databaseProvider);
-  return db.getDistributor(id);
-});
-
-final _billsProvider =
-    FutureProvider.family<List<Bill>, int>((ref, distId) async {
+final _billsProvider = FutureProvider.family<List<Bill>, int>((ref, distId) async {
   final db = ref.watch(databaseProvider);
   return db.getBillsByDistributor(distId);
 });
@@ -25,171 +17,159 @@ class DistributorDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final distAsync = ref.watch(_distributorProvider(distributorId));
+    final distAsync = ref.watch(distributorListProvider);
     final billsAsync = ref.watch(_billsProvider(distributorId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Distributor Details')),
+      appBar: AppBar(title: const Text('Supplier Details')),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AddBillScreen(distributorId: distributorId),
-            ),
-          );
-          ref.invalidate(_billsProvider(distributorId));
+          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(distributorId: distributorId)));
+          if (result == true) ref.invalidate(_billsProvider(distributorId));
         },
-        child: const Icon(Icons.add, size: 32),
+        child: const Icon(Icons.add),
       ),
       body: distAsync.when(
-        data: (dist) {
-          if (dist == null) {
-            return const Center(child: Text('Distributor not found'));
-          }
+        data: (dists) {
+          final dist = dists.where((d) => d.id == distributorId).firstOrNull;
+          if (dist == null) return const Center(child: Text('Supplier not found'));
           return Column(
             children: [
-              _buildHeader(context, dist),
-              Expanded(
-                child: billsAsync.when(
-                  data: (bills) => _buildBillList(context, bills, ref),
-                  error: (e, _) => Center(child: Text('Error: $e')),
-                  loading: () => const Center(
-                      child: CircularProgressIndicator()),
-                ),
-              ),
+              _header(context, dist),
+              Expanded(child: _billsList(context, billsAsync, ref)),
             ],
           );
         },
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, Distributor dist) {
+  Widget _header(BuildContext context, Distributor dist) {
     return Container(
-      width: double.infinity,
-      color: Colors.white,
+      color: Theme.of(context).cardTheme.color,
       padding: const EdgeInsets.all(20),
-      child: Column(
+      child: Row(
         children: [
           CircleAvatar(
-            radius: 32,
-            backgroundColor: AppTheme.primaryColor,
-            child: Text(
-              dist.name[0].toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white),
+            radius: 28,
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            child: Text(dist.name[0].toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(dist.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                if (dist.company != null && dist.company!.isNotEmpty)
+                  Text(dist.company!, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                if (dist.phone != null && dist.phone!.isNotEmpty)
+                  Text(dist.phone!, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Text(dist.name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          if (dist.company != null && dist.company!.isNotEmpty)
-            Text(dist.company!,
-                style: const TextStyle(fontSize: 16, color: Colors.grey)),
-          if (dist.phone != null && dist.phone!.isNotEmpty)
-            Text(dist.phone!,
-                style: const TextStyle(fontSize: 16, color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildBillList(
-      BuildContext context, List<Bill> bills, WidgetRef ref) {
-    if (bills.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long, size: 64, color: Colors.grey[300]),
-            const SizedBox(height: 12),
-            const Text('No bills yet',
-                style: TextStyle(fontSize: 18, color: Colors.grey)),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AddBillScreen(distributorId: distributorId),
-                  ),
-                );
-                ref.invalidate(_billsProvider(distributorId));
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add First Bill'),
+  Widget _billsList(BuildContext context, AsyncValue<List<Bill>> billsAsync, WidgetRef ref) {
+    return billsAsync.when(
+      data: (bills) {
+        if (bills.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
+                const SizedBox(height: 12),
+                const Text('No bills yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(distributorId: distributorId)));
+                    if (result == true) ref.invalidate(_billsProvider(distributorId));
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Bill'),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(_billsProvider(distributorId)),
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 8, bottom: 80),
-        itemCount: bills.length,
-        itemBuilder: (context, index) {
-          final bill = bills[index];
-          return _buildBillCard(context, bill, ref);
-        },
-      ),
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(_billsProvider(distributorId)),
+          child: ListView.builder(
+            padding: const EdgeInsets.only(top: 8, bottom: 80),
+            itemCount: bills.length,
+            itemBuilder: (ctx, i) => _billCard(context, bills[i], ref),
+          ),
+        );
+      },
+      error: (e, _) => Center(child: Text('$e')),
+      loading: () => const Center(child: CircularProgressIndicator()),
     );
   }
 
-  Widget _buildBillCard(BuildContext context, Bill bill, WidgetRef ref) {
+  Widget _billCard(BuildContext context, Bill bill, WidgetRef ref) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BillDetailScreen(billId: bill.id),
-            ),
-          );
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)));
           ref.invalidate(_billsProvider(distributorId));
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.info.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Bill #${bill.billNumber}',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}',
-                      style: const TextStyle(fontSize: 15, color: Colors.grey),
-                    ),
+                    Text('#${bill.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    Text('${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('₹${bill.amount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  StatusBadge(billId: bill.id),
-                ],
-              ),
+              Text('₹${bill.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(width: 8),
+              StatusBadgeWidget(billId: bill.id),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class StatusBadgeWidget extends ConsumerWidget {
+  final int billId;
+  const StatusBadgeWidget({super.key, required this.billId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusAsync = ref.watch(billStatusProvider(billId));
+    return statusAsync.when(
+      data: (status) {
+        final color = status == 'Paid' ? AppColors.success : status == 'Partial' ? AppColors.warning : AppColors.danger;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+          child: Text(status, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+        );
+      },
+      error: (_, __) => const SizedBox(),
+      loading: () => const SizedBox(),
     );
   }
 }

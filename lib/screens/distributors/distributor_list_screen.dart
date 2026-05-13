@@ -14,115 +14,89 @@ class DistributorListScreen extends ConsumerWidget {
     final async = ref.watch(distributorListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Distributors')),
+      appBar: AppBar(title: const Text('Suppliers')),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddDistributorScreen()),
-          );
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
           ref.invalidate(distributorListProvider);
         },
-        child: const Icon(Icons.add, size: 32),
+        child: const Icon(Icons.add),
       ),
       body: async.when(
         data: (distributors) {
-          if (distributors.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.business_outlined,
-                      size: 80, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  const Text('No distributors added yet',
-                      style: TextStyle(fontSize: 18, color: Colors.grey)),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const AddDistributorScreen()),
-                      );
-                      ref.invalidate(distributorListProvider);
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Distributor'),
-                  ),
-                ],
-              ),
-            );
-          }
+          if (distributors.isEmpty) return _emptyState(context, ref);
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(distributorListProvider),
             child: ListView.builder(
               padding: const EdgeInsets.only(top: 8, bottom: 80),
               itemCount: distributors.length,
-              itemBuilder: (context, index) {
-                final d = distributors[index];
-                return Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              DistributorDetailScreen(distributorId: d.id),
-                        ),
-                      );
-                      ref.invalidate(distributorListProvider);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor:
-                                AppTheme.primaryColor.withOpacity(0.1),
-                            child: Text(
-                              d.name[0].toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(d.name,
-                                    style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600)),
-                                if (d.company != null &&
-                                    d.company!.isNotEmpty)
-                                  Text(d.company!,
-                                      style: const TextStyle(
-                                          fontSize: 15, color: Colors.grey)),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+              itemBuilder: (ctx, i) => _distributorCard(context, distributors[i], ref),
             ),
           );
         },
-        error: (e, _) =>
-            Center(child: Text('Error: $e', style: const TextStyle(fontSize: 18))),
+        error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+
+  Widget _distributorCard(BuildContext context, Distributor d, WidgetRef ref) {
+    final colors = [AppColors.info, AppColors.accent, AppColors.primary, AppColors.success, AppColors.warning];
+    final color = colors[d.id % colors.length];
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => DistributorDetailScreen(distributorId: d.id)));
+          ref.invalidate(distributorListProvider);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: color.withOpacity(0.1),
+                child: Text(d.name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 18)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                    if (d.company != null && d.company!.isNotEmpty)
+                      Text(d.company!, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.business_outlined, size: 72, color: AppColors.textSecondary.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          const Text('No suppliers yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
+              ref.invalidate(distributorListProvider);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add Supplier'),
+          ),
+        ],
       ),
     );
   }

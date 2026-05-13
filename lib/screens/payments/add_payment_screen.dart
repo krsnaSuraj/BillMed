@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' hide Column;
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../models/enums.dart';
+import '../../theme/app_theme.dart';
 
 class AddPaymentScreen extends ConsumerStatefulWidget {
   final int billId;
@@ -41,20 +42,14 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
               TextFormField(
                 controller: _amountCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Payment Amount (₹) *',
-                  prefixIcon: Icon(Icons.currency_rupee),
-                ),
-                style: const TextStyle(fontSize: 18),
+                decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixIcon: Icon(Icons.currency_rupee)),
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Required';
                   final amt = double.tryParse(v);
-                  if (amt == null) return 'Invalid amount';
-                  if (amt <= 0) return 'Amount must be > 0';
+                  if (amt == null || amt <= 0) return 'Enter valid amount';
                   return null;
                 },
               ),
@@ -62,28 +57,40 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               InkWell(
                 onTap: _pickDate,
                 child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Date *',
-                    prefixIcon: Icon(Icons.calendar_today),
-                  ),
-                  child: Text(
-                    '${_paymentDate.day}/${_paymentDate.month}/${_paymentDate.year}',
-                    style: const TextStyle(fontSize: 18),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Payment Date *', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text('${_paymentDate.day}/${_paymentDate.month}/${_paymentDate.year}'),
                 ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<PaymentMode>(
                 value: _selectedMode,
-                decoration: const InputDecoration(
-                  labelText: 'Payment Mode *',
-                  prefixIcon: Icon(Icons.payment),
-                ),
-                style: const TextStyle(fontSize: 18),
-                items: PaymentMode.values.map((mode) {
+                decoration: const InputDecoration(labelText: 'Payment Mode *', prefixIcon: Icon(Icons.payment)),
+                items: PaymentMode.values.map((m) {
+                  IconData icon;
+                  switch (m) {
+                    case PaymentMode.cash:
+                      icon = Icons.money;
+                      break;
+                    case PaymentMode.upi:
+                      icon = Icons.phone_android;
+                      break;
+                    case PaymentMode.cheque:
+                      icon = Icons.receipt;
+                      break;
+                    case PaymentMode.neft:
+                    case PaymentMode.rtgs:
+                      icon = Icons.account_balance;
+                      break;
+                  }
                   return DropdownMenuItem(
-                    value: mode,
-                    child: Text(mode.display, style: const TextStyle(fontSize: 18)),
+                    value: m,
+                    child: Row(
+                      children: [
+                        Icon(icon, size: 20, color: AppColors.accent),
+                        const SizedBox(width: 10),
+                        Text(m.label),
+                      ],
+                    ),
                   );
                 }).toList(),
                 onChanged: (v) {
@@ -91,40 +98,30 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              if (_selectedMode == PaymentMode.upi ||
-                  _selectedMode == PaymentMode.neft ||
-                  _selectedMode == PaymentMode.rtgs ||
-                  _selectedMode == PaymentMode.cheque) ...[
-                TextFormField(
-                  controller: _referenceCtrl,
-                  decoration: InputDecoration(
-                    labelText: '${_selectedMode.label} Reference No.',
-                    hintText: 'e.g. UPI123ABC',
-                    prefixIcon: const Icon(Icons.tag),
-                  ),
-                  style: const TextStyle(fontSize: 18),
+              TextFormField(
+                controller: _referenceCtrl,
+                decoration: InputDecoration(
+                  labelText: '${_selectedMode.label} Reference',
+                  hintText: _selectedMode == PaymentMode.upi
+                      ? 'UPI transaction ID'
+                      : _selectedMode == PaymentMode.cheque
+                          ? 'Cheque number'
+                          : 'Transaction reference',
+                  prefixIcon: const Icon(Icons.tag),
                 ),
-                const SizedBox(height: 16),
-              ],
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _notesCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Notes (optional)',
-                  prefixIcon: Icon(Icons.notes),
-                ),
-                style: const TextStyle(fontSize: 18),
+                decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
                 maxLines: 2,
               ),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _saving ? null : _save,
                 child: _saving
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Save Payment'),
+                    ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Record Payment'),
               ),
             ],
           ),
@@ -134,12 +131,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _paymentDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
+    final picked = await showDatePicker(context: context, initialDate: _paymentDate, firstDate: DateTime(2020), lastDate: DateTime.now());
     if (picked != null) setState(() => _paymentDate = picked);
   }
 
@@ -147,17 +139,13 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final db = ref.read(databaseProvider);
-      await db.addPayment(PaymentsCompanion(
+      await ref.read(databaseProvider).addPayment(PaymentsCompanion(
         billId: Value(widget.billId),
         paymentDate: Value(_paymentDate),
         amount: Value(double.parse(_amountCtrl.text.trim())),
         mode: Value(_selectedMode.label),
-        referenceNo: Value(_referenceCtrl.text.trim().isEmpty
-            ? null
-            : _referenceCtrl.text.trim()),
-        notes: Value(
-            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
+        referenceNo: Value(_referenceCtrl.text.trim().isEmpty ? null : _referenceCtrl.text.trim()),
+        notes: Value(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
       ));
       if (mounted) Navigator.pop(context, true);
     } finally {
