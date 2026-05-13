@@ -5,10 +5,22 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../distributors/distributor_detail_screen.dart';
 import '../distributors/add_distributor_screen.dart';
+import '../bills/bill_detail_screen.dart';
 
 final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   final db = ref.watch(databaseProvider);
   return BillMedDao(db).getDashboardSummary();
+});
+
+final overdueCountProvider = FutureProvider<int>((ref) async {
+  final db = ref.watch(databaseProvider);
+  final allBills = await db.getAllBills();
+  if (allBills.isEmpty) return 0;
+  final paidMap = await db.getTotalPaidForBills(allBills.map((b) => b.id).toList());
+  return allBills.where((b) {
+    final paid = paidMap[b.id] ?? 0.0;
+    return paid <= 0 && DateTime.now().difference(b.billDate).inDays > 30;
+  }).length;
 });
 
 class DashboardScreen extends ConsumerWidget {
@@ -17,6 +29,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(dashboardProvider);
+    final overdueAsync = ref.watch(overdueCountProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,7 +39,7 @@ class DashboardScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.medical_services, size: 20),
@@ -49,6 +62,7 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 16, bottom: 24),
             children: [
               _buildSummaryGrid(data),
+              _overdueBanner(context, overdueAsync.valueOrNull ?? 0, ref),
               const SizedBox(height: 8),
               _buildRecentHeader(context),
               ...data.distributorBalances.map(
@@ -81,6 +95,42 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _overdueBanner(BuildContext context, int count, WidgetRef ref) {
+    if (count == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: AppColors.danger.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            // Navigate to bills tab with overdue filter
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$count overdue bill${count > 1 ? 's' : ''}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.danger)),
+                      const Text('Tap to view', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: AppColors.danger),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

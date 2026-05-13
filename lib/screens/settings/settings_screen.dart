@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/export_service.dart';
+import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
 import '../reports/reports_screen.dart';
 
@@ -34,6 +35,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final db = ref.read(databaseProvider);
       await ExportService.exportToCsv(db, type: type);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _manualBackup() async {
+    setState(() => _exporting = true);
+    try {
+      final db = ref.read(databaseProvider);
+      final path = await BackupService.exportBackup(db);
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Backup exported successfully')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    setState(() => _exporting = true);
+    try {
+      final db = ref.read(databaseProvider);
+      final success = await BackupService.importBackup(db);
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Backup restored. Restart the app.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Restore cancelled')),
+          );
+        }
+      }
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -73,6 +110,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.backup, color: AppColors.accent),
               title: const Text('Auto Backup'),
               subtitle: const Text('Android Auto Backup (Google Drive)'),
+            ),
+            ListTile(
+              leading: Icon(Icons.backup_outlined, color: _exporting ? AppColors.textSecondary : AppColors.accent),
+              title: const Text('Manual Backup'),
+              subtitle: const Text('Export database file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _manualBackup(),
+            ),
+            ListTile(
+              leading: Icon(Icons.restore, color: _exporting ? AppColors.textSecondary : AppColors.warning),
+              title: const Text('Restore from Backup'),
+              subtitle: const Text('Import .db file'),
+              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exporting ? null : () => _restoreBackup(),
             ),
             ListTile(
               leading: Icon(Icons.file_download, color: _exporting ? AppColors.textSecondary : AppColors.info),
