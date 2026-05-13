@@ -1,0 +1,46 @@
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.buildername/
+build/
+*.iml
+*.lock
+*.hprof
+*.snap
+*.tags
+*.tags_sorted_by_file
+
+# Dart
+.dart_tool/
+.pub/
+pubspec.lock
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Runner.xcodeproj/project.xcworkspace/
+ios/Runner.xcworkspace/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
