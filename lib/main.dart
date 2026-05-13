@@ -4,6 +4,7 @@ import 'database/database.dart';
 import 'theme/app_theme.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/distributors/distributor_list_screen.dart';
+import 'services/update_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,23 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  bool _checkedUpdate = false;
 
   final screens = const [
     DashboardScreen(),
     DistributorListScreen(),
   ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_checkedUpdate) {
+      _checkedUpdate = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        UpdateService.checkForUpdates(context);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

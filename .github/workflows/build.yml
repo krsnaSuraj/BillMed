@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -24,26 +26,41 @@ jobs:
           channel: stable
           flutter-version: '3.41.5'
 
+      - name: Get version from pubspec
+        id: version
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "ver=$VER" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.ver }}"
+          EXISTS=$(gh release view "$TAG" --json tagName 2>/dev/null || echo "")
+          if [ -n "$EXISTS" ]; then echo "exists=true" >> $GITHUB_OUTPUT; else echo "exists=false" >> $GITHUB_OUTPUT; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
         run: flutter pub get
 
       - name: Generate database code
+        if: steps.check.outputs.exists == 'false'
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build APK
+        if: steps.check.outputs.exists == 'false'
         run: flutter build apk --release
 
-      - name: Get version
-        id: version
-        run: echo "tag=$(date +'v%Y%m%d.%H%M')" >> $GITHUB_OUTPUT
-
       - name: Create Release
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: Build ${{ steps.version.outputs.tag }}
+          tag_name: v${{ steps.version.outputs.ver }}
+          name: BillMed v${{ steps.version.outputs.ver }}
           body: |
-            Auto-built APK
-            Commit: ${{ github.sha }}
+            New version v${{ steps.version.outputs.ver }}
           files: build/app/outputs/flutter-apk/app-release.apk
           generate_release_notes: false
