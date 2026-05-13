@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/bank_statement_service.dart';
 import '../../theme/app_theme.dart';
-
 import 'bank_preview_screen.dart';
+import 'manual_entry_screen.dart';
 
 class BankImportScreen extends ConsumerStatefulWidget {
   const BankImportScreen({super.key});
@@ -43,9 +43,20 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
       if (!mounted) return;
 
       if (result.status == 'FAILED' || result.transactions.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message.isNotEmpty ? result.message : 'Failed to parse statement')),
+        final goManual = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Import Failed'),
+            content: Text(result.message.isNotEmpty ? result.message : 'Could not parse statement.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enter Manually')),
+            ],
+          ),
         );
+        if (goManual == true && mounted) {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualEntryScreen()));
+        }
         return;
       }
 
