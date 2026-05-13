@@ -7,6 +7,7 @@ import 'screens/bills/bill_list_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'services/update_service.dart';
 import 'services/notification_service.dart';
+import 'services/backup_service.dart';
 import 'providers/database_provider.dart';
 
 void main() {
@@ -35,7 +36,7 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+class _MainShellState extends ConsumerState<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _checkedUpdate = false;
 
@@ -45,6 +46,32 @@ class _MainShellState extends ConsumerState<MainShell> {
     DistributorListScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _autoBackup();
+    }
+  }
+
+  Future<void> _autoBackup() async {
+    try {
+      final db = ref.read(databaseProvider);
+      await BackupService.autoBackup(db);
+    } catch (_) {}
+  }
 
   @override
   void didChangeDependencies() {

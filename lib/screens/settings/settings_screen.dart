@@ -7,6 +7,7 @@ import '../../services/export_service.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
 import '../reports/reports_screen.dart';
+import '../reports/yearly_report_screen.dart';
 import '../bank_import/bank_import_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -121,6 +122,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: const Text('Parse PDF & import transactions'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankImportScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.assessment, color: AppColors.success),
+              title: const Text('CA Report'),
+              subtitle: const Text('Yearly turnover, credit/debit summary'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const YearlyReportScreen())),
             ),
             ListTile(
               leading: const Icon(Icons.account_balance_wallet, color: AppColors.info),

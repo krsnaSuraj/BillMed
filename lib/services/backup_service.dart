@@ -26,6 +26,18 @@ class BackupService {
     return backup.path;
   }
 
+  static Future<void> autoBackup(BillMedDatabase db) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final dbFile = File('${dir.path}/billmed.db');
+    if (!await dbFile.exists()) return;
+
+    final downloadsDir = Directory('/storage/emulated/0/Download');
+    if (!await downloadsDir.exists()) return;
+
+    final backup = File('${downloadsDir.path}/BillMed_auto_backup.db');
+    await dbFile.copy(backup.path);
+  }
+
   static Future<bool> importBackup(BillMedDatabase db) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
