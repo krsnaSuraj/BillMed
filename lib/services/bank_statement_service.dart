@@ -248,13 +248,13 @@ class BankStatementService {
 
     for (final line in lines) {
       final lower = line.toLowerCase();
-      if (lower.contains('opening') || lower.contains('b/f')) {
+      if ((lower.startsWith('opening') || lower.contains('opening balance') || lower.startsWith('b/f'))) {
         final v = _numbers(line).lastOrNull;
-        if (v != null) { openingBal = v; foundOpening = true; }
+        if (v != null && !foundOpening) { openingBal = v; foundOpening = true; continue; }
       }
-      if (lower.contains('closing') || lower.contains('c/f')) {
+      if ((lower.startsWith('closing') || lower.contains('closing balance') || lower.startsWith('c/f'))) {
         final v = _numbers(line).lastOrNull;
-        if (v != null) { closingBal = v; foundClosing = true; }
+        if (v != null && !foundClosing) { closingBal = v; foundClosing = true; continue; }
       }
       if ((lower.contains('date') && (lower.contains('particular') || lower.contains('narration'))) ||
           line.startsWith('---') || line.startsWith('===')) { continue; }
@@ -283,7 +283,17 @@ class BankStatementService {
             credit = amounts[1]; debit = amounts[0];
           }
         } else if (amounts.length == 2) {
-          balance = amounts[1]; debit = amounts[0];
+          balance = amounts[1];
+          if (lower.contains('dr') || lower.contains('debit') || lower.contains('withdrawal') ||
+              lower.contains('neft') || lower.contains('upi') || lower.contains('atm') ||
+              lower.contains('paid') || lower.contains('transfer') || lower.contains('chq')) {
+            debit = amounts[0];
+          } else if (lower.contains('cr') || lower.contains('credit') || lower.contains('deposit') ||
+                     lower.contains('interest') || lower.contains('refund') || lower.contains('by')) {
+            credit = amounts[0];
+          } else {
+            debit = amounts[0];
+          }
         } else {
           balance = amounts[0];
         }
@@ -335,7 +345,12 @@ class BankStatementService {
   }
 
   static List<double> _numbers(String text) {
-    return RegExp(r'([0-9,]+\.\d{2})').allMatches(text).map((m) =>
+    final cleaned = text.replaceAll(RegExp(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}'), '');
+    final decimalMatches = RegExp(r'([0-9,]+\.\d{2})').allMatches(cleaned).map((m) =>
         double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0).toList();
+    if (decimalMatches.isNotEmpty) return decimalMatches;
+    return RegExp(r'\b(\d{3,})\b').allMatches(cleaned)
+        .map((m) => double.tryParse(m.group(1)!) ?? 0)
+        .where((n) => n < 1900 || n > 2100).toList();
   }
 }
