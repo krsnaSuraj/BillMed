@@ -48,24 +48,12 @@ class BankStatementService {
         final bytes = await file.readAsBytes();
         final aiResult = await GeminiService.parsePdf(apiKey: geminiKey, pdfBytes: bytes);
         if (aiResult != null) {
-          // Check if it's an error message from Gemini
-          if (aiResult.startsWith('ERROR:')) {
-            return BankStatementResult(
-              status: 'FAILED',
-              message: aiResult.substring(6),
-              transactions: [],
-            );
+          if (!aiResult.startsWith('ERROR:')) {
+            final parsed = _parseGeminiResponse(aiResult);
+            if (parsed != null && parsed.transactions.isNotEmpty) return parsed;
           }
-          final parsed = _parseGeminiResponse(aiResult);
-          if (parsed != null && parsed.transactions.isNotEmpty) return parsed;
         }
-      } catch (e) {
-        return BankStatementResult(
-          status: 'FAILED',
-          message: 'AI error: ${e.toString().substring(0, e.toString().length.clamp(0, 100))}',
-          transactions: [],
-        );
-      }
+      } catch (_) {}
     }
 
     // Fallback: regex parser on extracted text
@@ -155,39 +143,40 @@ class BankStatementService {
     int searchFrom = 0;
 
     while (true) {
-      final streamStart = fileStr.indexOf('stream', searchFrom);
+      // Find 'stream' in bytes to avoid string/byte index mismatch
+      final streamStart = _findBytes(bytes, [115, 116, 114, 101, 97, 109], searchFrom);
       if (streamStart == -1) break;
 
-      // Check if preceding dict has FlateDecode
+      // Check if preceding dict has FlateDecode (use string search for text)
       final dictEnd = streamStart;
-      final dictStart = fileStr.lastIndexOf('<<', dictEnd);
-      final dict = dictStart != -1 ? fileStr.substring(dictStart, dictEnd) : '';
+      final dictStr = fileStr.substring(0, fileStr.length > dictEnd ? dictEnd : fileStr.length);
+      final dictPos = dictStr.lastIndexOf('<<');
+      final dict = dictPos != -1 ? dictStr.substring(dictPos, dictEnd) : '';
       final isFlate = dict.contains('FlateDecode');
 
-      // Find end of stream data
-      final dataStart = fileStr.indexOf('\n', streamStart);
-      if (dataStart == -1 || dataStart > streamStart + 20) { searchFrom = streamStart + 6; continue; }
+      // Find newline after 'stream' to get data start
+      int dataStart = streamStart + 6;
+      while (dataStart < bytes.length &&
+          (bytes[dataStart] == 10 || bytes[dataStart] == 13)) { dataStart++; }
 
-      final dataBegin = dataStart + 1;
-      final endstreamIdx = fileStr.indexOf('endstream', dataBegin);
-      if (endstreamIdx == -1) break;
+      // Find 'endstream' in bytes
+      final endstreamPos = _findBytes(bytes, [101, 110, 100, 115, 116, 114, 101, 97, 109], dataStart);
+      if (endstreamPos == -1) break;
 
-      final rawData = bytes.sublist(dataBegin, endstreamIdx);
-      searchFrom = endstreamIdx + 9;
+      // Trim trailing whitespace/newlines
+      int dataEnd = endstreamPos;
+      while (dataEnd > dataStart &&
+          (bytes[dataEnd - 1] == 10 || bytes[dataEnd - 1] == 13 || bytes[dataEnd - 1] == 32)) { dataEnd--; }
+
+      final rawData = bytes.sublist(dataStart, dataEnd);
+      searchFrom = endstreamPos + 9;
 
       String extracted;
       if (isFlate) {
         try {
           final decoder = ZLibDecoder();
           extracted = String.fromCharCodes(decoder.convert(rawData));
-        } catch (_) {
-          try {
-            int trim = rawData.length;
-            while (trim > 0 && (rawData[trim - 1] == 10 || rawData[trim - 1] == 13)) { trim--; }
-            final decoder = ZLibDecoder();
-            extracted = String.fromCharCodes(decoder.convert(rawData.sublist(0, trim)));
-          } catch (_) { continue; }
-        }
+        } catch (_) { continue; }
       } else {
         extracted = String.fromCharCodes(rawData);
       }
@@ -196,6 +185,17 @@ class BankStatementService {
     }
 
     return result.toString().trim();
+  }
+
+  static int _findBytes(List<int> bytes, List<int> pattern, int start) {
+    for (int i = start; i <= bytes.length - pattern.length; i++) {
+      bool match = true;
+      for (int j = 0; j < pattern.length; j++) {
+        if (bytes[i + j] != pattern[j]) { match = false; break; }
+      }
+      if (match) return i;
+    }
+    return -1;
   }
 
   static String _extractPdfOperators(String content) {
