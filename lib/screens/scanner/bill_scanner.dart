@@ -9,14 +9,12 @@ class BillScanResult {
   final String? billNumber;
   final DateTime? billDate;
   final double? amount;
-  final String? distributorName;
   final String rawText;
 
   BillScanResult({
     this.billNumber,
     this.billDate,
     this.amount,
-    this.distributorName,
     required this.rawText,
   });
 
@@ -147,7 +145,6 @@ class BillScanner {
       billNumber: billNumber,
       billDate: billDate,
       amount: amount,
-      distributorName: distributorName,
       rawText: text,
     );
   }
@@ -175,7 +172,6 @@ class ScanPreviewScreen extends StatelessWidget {
                   _field('Bill Number', result.billNumber ?? 'Not found'),
                   _field('Date', result.billDate != null ? DateFormat('dd/MM/yyyy').format(result.billDate!) : 'Not found'),
                   _field('Amount', result.amount != null ? '₹${result.amount!.toStringAsFixed(2)}' : 'Not found'),
-                  _field('Supplier', result.distributorName ?? 'Not found'),
                 ],
               ),
             ),

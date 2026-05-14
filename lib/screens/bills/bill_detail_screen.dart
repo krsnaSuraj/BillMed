@@ -47,28 +47,35 @@ class BillDetailScreen extends ConsumerWidget {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton.small(
-            heroTag: 'edit',
-            onPressed: () async {
-              final db = ref.read(databaseProvider);
-              final bill = await db.getBill(billId);
-              if (bill != null && context.mounted) {
-                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(bill: bill)));
-                if (result == true) {
-                  ref.invalidate(_billProvider(billId));
-                  ref.invalidate(_paymentsProvider(billId));
-                  ref.invalidate(paidAmountProvider(billId));
+          SizedBox(
+            height: 40,
+            width: 40,
+            child: FloatingActionButton.small(
+              heroTag: 'edit',
+              onPressed: () async {
+                final db = ref.read(databaseProvider);
+                final bill = await db.getBill(billId);
+                if (bill != null && context.mounted) {
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(bill: bill)));
+                  if (result == true) {
+                    ref.invalidate(_billProvider(billId));
+                    ref.invalidate(_paymentsProvider(billId));
+                    ref.invalidate(paidAmountProvider(billId));
+                  }
                 }
-              }
-            },
-            child: const Icon(Icons.edit),
+              },
+              child: const Icon(Icons.edit, size: 18),
+            ),
           ),
           const SizedBox(height: 8),
           FloatingActionButton.extended(
+            heroTag: 'payment',
             onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)));
-              ref.invalidate(_paymentsProvider(billId));
-              ref.invalidate(paidAmountProvider(billId));
+              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId)));
+              if (result == true) {
+                ref.invalidate(_paymentsProvider(billId));
+                ref.invalidate(paidAmountProvider(billId));
+              }
             },
             icon: const Icon(Icons.payments_rounded),
             label: const Text('Add Payment'),
