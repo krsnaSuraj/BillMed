@@ -356,10 +356,10 @@ class BankStatementService {
             .replaceAll(RegExp(r'\s+'), ' ').trim();
         double debit = 0, credit = 0, balance = 0;
         final isDebit = lower.contains('/dr/') || lower.contains('neft dr') || lower.contains('debit') ||
-            lower.contains('withdrawal') || lower.contains('atm') || lower.contains('paid') ||
+            lower.contains('withdrawal') || lower.contains('atm') || lower.contains('payment') ||
             lower.contains('transfer') || lower.contains('chq') || lower.contains('ift') ||
             lower.contains('sc neft') || lower.contains('sms charge') || lower.contains('folio amt') ||
-            lower.contains('imps dr') || lower.contains('ib-');
+            lower.contains('imps dr') || lower.contains('ib-') || lower.contains('oth-payment');
         final isCredit = !isDebit && (lower.contains('/cr/') || lower.contains('credit') ||
             lower.contains('deposit') || lower.contains('interest') || lower.contains('refund') ||
             lower.contains('by ') || lower.contains('cash deposit') || lower.contains('upi/cr'));
