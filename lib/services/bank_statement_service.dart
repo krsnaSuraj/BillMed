@@ -245,6 +245,8 @@ class BankStatementService {
     final merged = <String>[];
     final buffer = StringBuffer();
     bool inTransaction = false;
+    String? ocBuffer;
+    bool isOcLine = false;
 
     for (final line in lines) {
       final lower = line.toLowerCase().trim();
@@ -254,10 +256,30 @@ class BankStatementService {
           lower.startsWith('disclaimer') || lower.startsWith('end of') ||
           lower.startsWith('unless the')) { continue; }
 
-      if (lower.contains('opening balance') || lower.contains('closing balance')) {
-        merged.add(line);
+      // Detect opening/closing balance lines (may be split across lines)
+      if (lower.contains('opening') || lower.contains('closing') ||
+          lower.startsWith('balance') || lower.startsWith('rs.')) {
+        ocBuffer ??= '';
+        ocBuffer = '$ocBuffer $line'.trim();
+        isOcLine = true;
+        if (hasDecimalAmount.hasMatch(ocBuffer)) {
+          merged.add(ocBuffer);
+          ocBuffer = null;
+          isOcLine = false;
+        }
         continue;
       }
+      if (isOcLine && ocBuffer != null) {
+        ocBuffer = '$ocBuffer $line'.trim();
+        if (hasDecimalAmount.hasMatch(ocBuffer)) {
+          merged.add(ocBuffer);
+          ocBuffer = null;
+          isOcLine = false;
+        }
+        continue;
+      }
+      ocBuffer = null;
+      isOcLine = false;
 
       if (dateAtStart.hasMatch(line)) {
         if (inTransaction) {
@@ -294,14 +316,14 @@ class BankStatementService {
 
     for (final line in lines) {
       final lower = line.toLowerCase();
-      if (lower.startsWith('opening balance')) {
+      if (lower.contains('opening balance') && _numbers(line).isNotEmpty) {
         final v = _numbers(line).lastOrNull;
-        if (v != null && !foundOpening) { openingBal = v; foundOpening = true; }
+        if (v != null && !foundOpening && !lower.startsWith('page')) { openingBal = v; foundOpening = true; }
         continue;
       }
-      if (lower.startsWith('closing balance')) {
+      if (lower.contains('closing balance') && _numbers(line).isNotEmpty) {
         final v = _numbers(line).lastOrNull;
-        if (v != null && !foundClosing) { closingBal = v; foundClosing = true; }
+        if (v != null && !foundClosing && !lower.startsWith('page')) { closingBal = v; foundClosing = true; }
         continue;
       }
 
