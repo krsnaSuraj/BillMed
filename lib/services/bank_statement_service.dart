@@ -239,8 +239,54 @@ class BankStatementService {
     return buffer.toString();
   }
 
+  static List<String> _mergeLines(List<String> lines) {
+    final dateAtStart = RegExp(r'^\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}');
+    final hasDecimalAmount = RegExp(r'[0-9,]+\.\d{2}');
+    final merged = <String>[];
+    final buffer = StringBuffer();
+    bool inTransaction = false;
+
+    for (final line in lines) {
+      final lower = line.toLowerCase().trim();
+      if (lower.isEmpty) { continue; }
+      if (lower.startsWith('page ') || lower.startsWith('txn date') ||
+          lower.startsWith('----') || lower.startsWith('===') ||
+          lower.startsWith('disclaimer') || lower.startsWith('end of') ||
+          lower.startsWith('unless the')) { continue; }
+
+      if (lower.contains('opening balance') || lower.contains('closing balance')) {
+        merged.add(line);
+        continue;
+      }
+
+      if (dateAtStart.hasMatch(line)) {
+        if (inTransaction) {
+          merged.add(buffer.toString().trim());
+          buffer.clear();
+        }
+        buffer.write(line);
+        inTransaction = true;
+        continue;
+      }
+
+      if (hasDecimalAmount.hasMatch(line) && inTransaction) {
+        buffer.write(' $line');
+        continue;
+      }
+
+      if (inTransaction && RegExp(r'[a-zA-Z0-9₹]').hasMatch(line)) {
+        buffer.write(' $line');
+      }
+    }
+    if (inTransaction && buffer.isNotEmpty) {
+      merged.add(buffer.toString().trim());
+    }
+    return merged;
+  }
+
   static BankStatementResult _parseTransactions(String text) {
-    final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final rawLines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final lines = _mergeLines(rawLines);
     final transactions = <ParsedTransaction>[];
     final datePattern = RegExp(r'(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})');
     double openingBal = 0, closingBal = 0;
@@ -248,16 +294,16 @@ class BankStatementService {
 
     for (final line in lines) {
       final lower = line.toLowerCase();
-      if ((lower.startsWith('opening') || lower.contains('opening balance') || lower.startsWith('b/f'))) {
+      if (lower.startsWith('opening balance')) {
         final v = _numbers(line).lastOrNull;
-        if (v != null && !foundOpening) { openingBal = v; foundOpening = true; continue; }
+        if (v != null && !foundOpening) { openingBal = v; foundOpening = true; }
+        continue;
       }
-      if ((lower.startsWith('closing') || lower.contains('closing balance') || lower.startsWith('c/f'))) {
+      if (lower.startsWith('closing balance')) {
         final v = _numbers(line).lastOrNull;
-        if (v != null && !foundClosing) { closingBal = v; foundClosing = true; continue; }
+        if (v != null && !foundClosing) { closingBal = v; foundClosing = true; }
+        continue;
       }
-      if ((lower.contains('date') && (lower.contains('particular') || lower.contains('narration'))) ||
-          line.startsWith('---') || line.startsWith('===')) { continue; }
 
       final dateMatch = datePattern.firstMatch(line);
       if (dateMatch == null) continue;
@@ -272,28 +318,24 @@ class BankStatementService {
         final desc = line.replaceAll(dateMatch.group(0)!, '').replaceAll(RegExp(r'[0-9,]+\.\d{2}'), '')
             .replaceAll(RegExp(r'\s+'), ' ').trim();
         double debit = 0, credit = 0, balance = 0;
+        final isDebit = lower.contains('/dr/') || lower.contains('neft dr') || lower.contains('debit') ||
+            lower.contains('withdrawal') || lower.contains('atm') || lower.contains('paid') ||
+            lower.contains('transfer') || lower.contains('chq') || lower.contains('ift') ||
+            lower.contains('sc neft') || lower.contains('sms charge') || lower.contains('folio amt') ||
+            lower.contains('imps dr') || lower.contains('ib-');
+        final isCredit = !isDebit && (lower.contains('/cr/') || lower.contains('credit') ||
+            lower.contains('deposit') || lower.contains('interest') || lower.contains('refund') ||
+            lower.contains('by ') || lower.contains('cash deposit') || lower.contains('upi/cr'));
 
         if (amounts.length == 3) {
           balance = amounts[2];
-          if (lower.contains('dr') || lower.contains('debit') || lower.contains('withdrawal') ||
-              lower.contains('neft') || lower.contains('upi') || lower.contains('atm') ||
-              lower.contains('paid') || lower.contains('transfer') || lower.contains('chq')) {
-            debit = amounts[1]; credit = amounts[0];
-          } else {
-            credit = amounts[1]; debit = amounts[0];
-          }
+          if (isDebit) { debit = amounts[1]; credit = amounts[0]; }
+          else { credit = amounts[1]; debit = amounts[0]; }
         } else if (amounts.length == 2) {
           balance = amounts[1];
-          if (lower.contains('dr') || lower.contains('debit') || lower.contains('withdrawal') ||
-              lower.contains('neft') || lower.contains('upi') || lower.contains('atm') ||
-              lower.contains('paid') || lower.contains('transfer') || lower.contains('chq')) {
-            debit = amounts[0];
-          } else if (lower.contains('cr') || lower.contains('credit') || lower.contains('deposit') ||
-                     lower.contains('interest') || lower.contains('refund') || lower.contains('by')) {
-            credit = amounts[0];
-          } else {
-            debit = amounts[0];
-          }
+          if (isDebit) { debit = amounts[0]; }
+          else if (isCredit) { credit = amounts[0]; }
+          else { debit = amounts[0]; }
         } else {
           balance = amounts[0];
         }
@@ -346,11 +388,7 @@ class BankStatementService {
 
   static List<double> _numbers(String text) {
     final cleaned = text.replaceAll(RegExp(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}'), '');
-    final decimalMatches = RegExp(r'([0-9,]+\.\d{2})').allMatches(cleaned).map((m) =>
+    return RegExp(r'([0-9,]+\.\d{2})').allMatches(cleaned).map((m) =>
         double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0).toList();
-    if (decimalMatches.isNotEmpty) return decimalMatches;
-    return RegExp(r'\b(\d{3,})\b').allMatches(cleaned)
-        .map((m) => double.tryParse(m.group(1)!) ?? 0)
-        .where((n) => n < 1900 || n > 2100).toList();
   }
 }

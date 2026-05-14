@@ -1,7 +1,7 @@
 name: billmed
 description: Distributor bill payment tracker for medical retail shops. Flutter offline app.
 publish_to: 'none'
-version: 2.3.2+1
+version: 2.3.3+1
 
 environment:
   sdk: ^3.3.0
