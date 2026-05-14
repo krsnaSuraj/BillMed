@@ -129,4 +129,4 @@ This codebase has undergone thorough code review. 18 issues were identified and 
 
 ## Version
 
-**v2.2.2** — [All Releases](https://github.com/krsnaSuraj/BillMed/releases)
+**v2.3.0** — [All Releases](https://github.com/krsnaSuraj/BillMed/releases)
