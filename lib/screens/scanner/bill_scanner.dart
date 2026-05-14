@@ -62,19 +62,6 @@ class BillScanner {
     String? billNumber;
     DateTime? billDate;
     double? amount;
-    String? distributorName;
-
-    // Try to find distributor name (first few non-empty lines, exclude common keywords)
-    for (final line in lines.take(6)) {
-      final upper = line.toUpperCase();
-      if (!upper.contains('GST') && !upper.contains('INVOICE') && !upper.contains('BILL')
-          && !upper.contains('ADDRESS') && !upper.contains('PHONE') && !upper.contains('EMAIL')
-          && !upper.contains('TAX') && !upper.contains('DATE') && !upper.contains('TOTAL')
-          && line.length > 3 && line.length < 60) {
-        distributorName = line;
-        break;
-      }
-    }
 
     // Find bill/invoice number
     for (final line in lines) {

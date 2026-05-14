@@ -1,59 +1,83 @@
 # BillMed
 
-Distributor bill payment tracker for medical retail shops. Fully offline Android application with optional AI enhancement via Gemini.
+Distributor bill payment tracker for medical retail shops. Offline-first Android application with optional AI enhancement via Google Gemini.
+
+---
+
+## Overview
+
+Record purchase bills from distributors, mark payments (Cash/UPI/Cheque/NEFT/RTGS), import bank statements, and track pending amounts per supplier. Core features work fully offline. AI features (bank PDF parsing, OCR correction) require an optional Gemini API key.
 
 ---
 
 ## Features
 
-| Category | Details |
-|----------|---------|
-| **Supplier Management** | Add, search, edit, delete distributors with name, company, phone |
-| **Bill Tracking** | Record bills with auto status: Unpaid → Partial → Paid |
-| **Payment Tracking** | 5 modes: Cash, UPI, Cheque, NEFT, RTGS with reference numbers |
-| **Dashboard** | Summary cards, supplier-wise balances, overdue alerts, count chips |
-| **Search & Filter** | By bill number, supplier, date range, status filter, sort by date/amount/status |
-| **OCR Scan** | Camera/gallery → auto-fill bill number, date, amount |
-| **AI Enhancement** | Optional Gemini API key in Settings — corrects OCR, parses bank PDFs |
-| **Reports** | Monthly turnover, collection rate, bar chart, distributor breakdown |
-| **CA Report** | Yearly credit/debit summary with monthly breakdown, CSV + PDF export |
-| **Bank Statement Import** | PDF parser with golden rule verification; AI parsing if API key provided; manual entry fallback |
-| **View Bank Transactions** | Browse imported transactions with search, debit/credit summary |
-| **PDF Export** | Generate and share bill PDFs with payment history |
-| **CSV Export** | Distributors, bills, payments, bank transactions — individual or all |
-| **Backup** | Auto backup on app close, Android Auto Backup (Google Drive), manual DB backup/restore |
-| **Notifications** | Overdue bill reminders on app launch |
-| **Dark Mode** | Light, Dark, or System auto |
-| **Auto Updates** | Checks GitHub for new versions, prompts update |
-| **APK Obfuscation** | Code obfuscation enabled |
+| Category | Features |
+|----------|----------|
+| **Suppliers** | Add, search, edit, delete. View pending amounts in list. |
+| **Bills** | Record with auto status: Unpaid → Partial → Paid. Search, filter by status/date/sort. |
+| **Payments** | 5 modes: Cash, UPI, Cheque, NEFT, RTGS. Reference number tracking. |
+| **Dashboard** | Summary cards, supplier-wise balances, overdue alerts with red badges. |
+| **OCR Scan** | Camera or gallery → auto-fill bill number, date, amount. |
+| **Bank Import** | PDF parser with golden rule verification. AI parsing available with Gemini key. |
+| **Reports** | Monthly turnover, bar chart, collection rate, distributor breakdown. |
+| **CA Report** | Yearly credit/debit summary, monthly breakdown, PDF + CSV export. |
+| **Bank Transactions** | Browse imported transactions with search and credit/debit stats. |
+| **Bill PDF** | Generate and share bill PDFs with payment history. |
+| **CSV Export** | Export suppliers, bills, payments, or bank transactions. |
+| **Backup** | Auto backup on app close. Manual DB backup and restore. |
+| **Dark Mode** | Light, Dark, or System default. |
+| **Notifications** | Overdue bill reminders on app launch. |
+| **Auto Updates** | Checks GitHub Releases for new versions. |
 
 ---
 
-## Security & Privacy
+## Screens
 
-| Concern | How It's Handled |
-|---------|-----------------|
-| **API key safety** | User provides own key via Settings → stored in app storage. NOT in code/repo. |
-| **Data privacy** | 100% offline. No data leaves the device. |
-| **Backup** | Auto backup to Downloads folder — no cloud required. |
-| **APK safety** | Code obfuscation enabled — reverse engineering difficult. |
+| Tab | Content |
+|-----|---------|
+| **Dashboard** | Summary (billed/paid/pending), overdue banner, count chips, supplier list with balances |
+| **Bills** | Full list with search, date range, status filter, 3-way sort, OCR scan, overdue badges |
+| **Suppliers** | Searchable list with pending amounts. Long press for edit/delete. |
+| **Settings** | Theme, Gemini API key, reports, CA report, bank import, bank transactions, CSV export, backup |
 
 ---
 
 ## AI Integration (Optional)
 
-BillMed supports Google Gemini for enhanced parsing:
+BillMed supports Google Gemini for improved accuracy. The API key is entered by the user in Settings and stored locally. It is never included in the source code.
 
-- **Bank statement import**: Send PDF text to Gemini for structured extraction
-- **OCR correction**: Gemini fixes common OCR recognition errors
-- **Multi-model fallback**: Automatically switches between gemini-2.0-flash, 1.5-flash, 1.5-flash-8b on rate limit
-- **No key? No problem**: Falls back to regex parser and manual entry
+### What AI Improves
 
-### How to get a free API key
+| Feature | Without AI | With AI |
+|---------|-----------|---------|
+| Bank statement import | Regex parser (limited format support) | Gemini extracts transactions from any format |
+| OCR bill scan | Regex parsing of text | Gemini corrects recognition errors |
 
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-2. Click "Create API Key" (free, 60 requests/minute)
-3. Open BillMed → Settings → Gemini API Key → Paste key
+### Multi-Model Fallback
+
+When using AI, the app automatically switches between models if rate limits are hit:
+`gemini-2.0-flash` → `gemini-1.5-flash` → `gemini-1.5-flash-8b`
+
+If all models fail or no key is provided, the app falls back to the built-in regex parser or manual entry.
+
+### Getting a Free API Key
+
+1. Visit [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Click "Create API Key" — free tier includes 60 requests per minute
+3. Open BillMed → Settings → Gemini API Key → paste key
+
+---
+
+## Security
+
+| Concern | Handling |
+|---------|----------|
+| API key exposure | Key stored in app preferences, NOT in code or repository |
+| Data privacy | Bank statements processed on-device or via user's own API key |
+| Network usage | Core features work offline. AI features require internet. |
+| APK protection | Code obfuscation enabled via Flutter `--obfuscate` |
+| Secrets in repo | None. Verified by scan. |
 
 ---
 
@@ -75,31 +99,20 @@ Latest release: [github.com/krsnaSuraj/BillMed/releases/latest](https://github.c
 
 ---
 
-## Screens
-
-| Tab | Content |
-|-----|---------|
-| **Dashboard** | Summary cards (billed/paid/pending), overdue banner, count chips, distributor balances |
-| **Bills** | Full list with search, date range, status filter, sort. OCR scan button. Overdue badges. |
-| **Suppliers** | Searchable list with pending amounts. Long press for edit/delete. |
-| **Settings** | Theme toggle, Gemini API key, reports, CA report, bank import, bank transactions view, CSV export, backup/restore |
-
----
-
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Framework | Flutter 3.41 (Dart) |
 | Database | Drift (SQLite ORM) |
-| State Management | Riverpod |
-| OCR | Google ML Kit (on-device, no API key) |
-| AI | Google Gemini (optional, user-provided key) |
+| State | Riverpod |
+| OCR | Google ML Kit (on-device) |
+| AI | Google Gemini (user-provided key) |
 | Charts | fl_chart |
 | CI/CD | GitHub Actions |
-| Obfuscation | Flutter --obfuscate |
-| Minimum SDK | Android 6.0 (API 23) |
-| APK Size | 89 MB |
+| Obfuscation | Flutter `--obfuscate` |
+| Min SDK | Android 6.0 (API 23) |
+| APK Size | ~89 MB |
 
 ---
 
@@ -108,43 +121,42 @@ Latest release: [github.com/krsnaSuraj/BillMed/releases/latest](https://github.c
 ```
 BillMed/
 ├── lib/
-│   ├── main.dart                    # App entry, 4-tab navigation, lifecycle
-│   ├── database/                    # Tables, CRUD, DAO, schema migrations
-│   ├── providers/                   # Riverpod (DB, theme, Gemini key)
-│   ├── services/                    # Update, backup, export, PDF, OCR, bank parser, notifications, Gemini
+│   ├── main.dart                    # Entry, 4-tab nav, lifecycle
+│   ├── database/                    # Tables, CRUD, DAO, migrations
+│   ├── providers/                   # DB, theme, Gemini key
+│   ├── services/                    # Update, export, backup, PDF, OCR, bank parser, notifications, Gemini
 │   ├── screens/
 │   │   ├── dashboard/               # Home
 │   │   ├── bills/                   # List, add, detail
 │   │   ├── distributors/            # List, add, detail
 │   │   ├── payments/                # Add/edit payment
-│   │   ├── reports/                 # Reports + bar chart
+│   │   ├── reports/                 # Reports + chart
 │   │   ├── reports/yearly_report    # CA yearly report
 │   │   ├── settings/                # Settings + AI key
-│   │   ├── scanner/                 # OCR bill scanner
+│   │   ├── scanner/                 # OCR scanner
 │   │   └── bank_import/             # PDF import, manual entry, bank view
-│   ├── models/                      # Enums
 │   └── theme/                       # Light + dark theme
-├── android/                         # Android configuration
-├── .github/workflows/build.yml      # CI
-├── UPDATE.bat                       # Local build/push script
+├── android/                         # Android config + backup rules
+├── .github/workflows/build.yml      # Auto-build on push
+├── UPDATE.bat                       # Local build/push
 └── pubspec.yaml                     # Dependencies
 ```
 
 ---
 
-## Database Schema
+## Version History
 
-```
-distributors:      id, name, company, phone, created_at
-bills:             id, distributor_id, bill_number, bill_date, amount, notes, created_at
-payments:          id, bill_id, payment_date, amount, mode, reference_no, notes, created_at
-bank_transactions: id, txn_date, description, debit, credit, balance, source_file, category, imported_at
-```
-
-Bill status is computed: `SUM(payments.amount)` vs `bills.amount` → Unpaid / Partial / Paid.
+| Version | Key Changes |
+|---------|-------------|
+| v2.3.0 | Gemini AI integration, bank transactions view, CA report PDF, backup fixes |
+| v2.2.2 | Bug fixes: backup crash, notification ID, N+1 query, DB leak |
+| v2.2.0 | Bank statement import with golden rule verification |
+| v2.1.0 | CSV export, reports screen, dark mode, search, filter |
+| v2.0.0 | Complete UI redesign, 4-tab navigation |
+| v1.0.0 | Initial release |
 
 ---
 
-## Version
+## License
 
-**v2.3.0** — [All Releases](https://github.com/krsnaSuraj/BillMed/releases)
+MIT

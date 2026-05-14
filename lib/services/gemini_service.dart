@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import '../providers/gemini_provider.dart';
 
 class GeminiService {
   // Models in order of preference — auto fallback on rate limit
