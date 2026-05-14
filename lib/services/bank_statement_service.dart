@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'gemini_service.dart';
 
 class ParsedTransaction {
   final DateTime txnDate;
@@ -33,18 +35,76 @@ class BankStatementResult {
 }
 
 class BankStatementService {
-  static Future<BankStatementResult> parseStatement({required String pdfPath}) async {
+  static Future<BankStatementResult> parseStatement({required String pdfPath, String? geminiKey}) async {
     final file = File(pdfPath);
     if (!await file.exists()) {
       return BankStatementResult(status: 'FAILED', message: 'File not found', transactions: []);
     }
 
     final text = await _extractPdfText(file);
-    if (text.isEmpty) {
-      return BankStatementResult(status: 'FAILED', message: 'Could not read PDF text', transactions: []);
+
+    // Try Gemini AI first if key available
+    if (geminiKey != null && geminiKey.isNotEmpty && text.isNotEmpty) {
+      try {
+        final aiResult = await GeminiService.parseBankStatement(apiKey: geminiKey, text: text);
+        if (aiResult != null) {
+          final parsed = _parseGeminiResponse(aiResult);
+          if (parsed != null && parsed.transactions.isNotEmpty) {
+            return parsed;
+          }
+        }
+      } catch (_) {}
     }
 
-    return _parseTransactions(text);
+    // Fallback: regex parser
+    if (text.isNotEmpty) {
+      final result = _parseTransactions(text);
+      if (result.transactions.isNotEmpty) return result;
+    }
+
+    return BankStatementResult(status: 'FAILED', message: 'Could not parse statement', transactions: []);
+  }
+
+  static BankStatementResult? _parseGeminiResponse(String jsonText) {
+    try {
+      final jsonMatch = RegExp(r'\[[\s\S]*\]').firstMatch(jsonText);
+      if (jsonMatch == null) return null;
+      final list = jsonDecode(jsonMatch.group(0)!) as List;
+      final txns = list.map((t) => ParsedTransaction(
+        txnDate: _parseDate(t['date']?.toString() ?? ''),
+        description: t['description']?.toString() ?? '',
+        debit: (t['debit'] ?? 0).runtimeType == double ? t['debit'] as double : double.tryParse(t['debit']?.toString() ?? '0') ?? 0,
+        credit: (t['credit'] ?? 0).runtimeType == double ? t['credit'] as double : double.tryParse(t['credit']?.toString() ?? '0') ?? 0,
+        balance: (t['balance'] ?? 0).runtimeType == double ? t['balance'] as double : double.tryParse(t['balance']?.toString() ?? '0') ?? 0,
+      )).toList();
+
+      if (txns.isEmpty) return null;
+
+      final totalDebit = txns.fold<double>(0, (s, t) => s + t.debit);
+      final totalCredit = txns.fold<double>(0, (s, t) => s + t.credit);
+
+      return BankStatementResult(
+        transactions: txns,
+        status: 'VERIFIED',
+        message: '${txns.length} transactions parsed via AI',
+        totalDebit: totalDebit,
+        totalCredit: totalCredit,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static DateTime _parseDate(String str) {
+    try {
+      final parts = str.split(RegExp(r'[\/\-]'));
+      if (parts.length >= 3) {
+        var y = int.parse(parts[2]);
+        if (y < 100) y += 2000;
+        return DateTime(y, int.parse(parts[1]), int.parse(parts[0]));
+      }
+    } catch (_) {}
+    return DateTime.now();
   }
 
   static Future<String> _extractPdfText(File file) async {

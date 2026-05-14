@@ -21,7 +21,7 @@ class YearlyReportScreen extends ConsumerWidget {
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: 'Export as PDF',
             onPressed: () async {
-              // Generate PDF report for CA
+              await PdfExportService.generateCaReportPdf(db);
             },
           ),
           IconButton(

@@ -118,7 +118,7 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBillScreen()));
           if (result == true) {
             ref.invalidate(allBillsProvider);
-            _loadPaidMap();
+            await _loadPaidMap();
           }
         },
         child: const Icon(Icons.add),

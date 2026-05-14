@@ -25,10 +25,17 @@ class BackupService {
       final dbFile = File('${dir.path}/billmed.db');
       if (!await dbFile.exists()) return;
 
-      final extDir = await getExternalStorageDirectory();
-      if (extDir == null) return;
+      // Try external storage first
+      Directory? backupDir;
+      try {
+        final ext = await getExternalStorageDirectory();
+        if (ext != null) backupDir = ext;
+      } catch (_) {}
 
-      final backup = File('${extDir.path}/BillMed_auto_backup.db');
+      // Fallback: use app documents directory
+      backupDir ??= dir;
+
+      final backup = File('${backupDir.path}/BillMed_auto_backup.db');
       await dbFile.copy(backup.path);
     } catch (_) {}
   }

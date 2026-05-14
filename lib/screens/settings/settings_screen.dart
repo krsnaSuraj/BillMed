@@ -9,6 +9,8 @@ import '../../theme/app_theme.dart';
 import '../reports/reports_screen.dart';
 import '../reports/yearly_report_screen.dart';
 import '../bank_import/bank_import_screen.dart';
+import '../bank_import/bank_view_screen.dart';
+import '../../providers/gemini_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -149,9 +151,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: const Text('View Bank Transactions'),
               subtitle: const Text('Imported transaction history'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const Scaffold(
-                body: Center(child: Text('Coming soon - Bank transaction viewer')),
-              ))),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankViewScreen())),
             ),
           ]),
           _section('Backup & Export', [
@@ -210,6 +210,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: _exporting ? null : () => _export('all'),
             ),
           ]),
+          _section('AI Settings', [
+            ListTile(
+              leading: const Icon(Icons.auto_awesome, color: AppColors.accent),
+              title: const Text('Gemini API Key'),
+              subtitle: Text(
+                ref.watch(geminiKeyProvider).isNotEmpty
+                    ? 'Key configured'
+                    : 'Required for AI features (bank import, OCR)',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showKeyDialog(),
+            ),
+          ]),
           _section('About', [
             ListTile(
               leading: const Icon(Icons.info_outline, color: AppColors.accent),
@@ -240,6 +253,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(children: tiles),
         ),
       ],
+    );
+  }
+
+  void _showKeyDialog() {
+    final keyCtrl = TextEditingController(text: ref.read(geminiKeyProvider));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gemini API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Get your free key from Google AI Studio:\nhttps://aistudio.google.com/apikey', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: keyCtrl,
+              decoration: const InputDecoration(labelText: 'API Key', hintText: 'Paste your key here'),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(geminiKeyProvider.notifier).setKey(keyCtrl.text.trim());
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }

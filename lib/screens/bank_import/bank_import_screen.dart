@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/bank_statement_service.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/gemini_provider.dart';
 import 'bank_preview_screen.dart';
 import 'manual_entry_screen.dart';
 
@@ -38,7 +39,11 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
     setState(() => _loading = true);
 
     try {
-      final result = await BankStatementService.parseStatement(pdfPath: _filePath!);
+      final geminiKey = ref.read(geminiKeyProvider);
+      final result = await BankStatementService.parseStatement(
+        pdfPath: _filePath!,
+        geminiKey: geminiKey.isNotEmpty ? geminiKey : null,
+      );
 
       if (!mounted) return;
 

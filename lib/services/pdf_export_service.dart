@@ -111,6 +111,71 @@ class PdfExportService {
     await Share.shareXFiles([XFile(file.path)], text: 'Bill #${bill.billNumber}');
   }
 
+  static Future<void> generateCaReportPdf(BillMedDatabase db) async {
+    final allTxns = await db.getAllBankTransactions();
+    final pdf = pw.Document();
+
+    final totalDebit = allTxns.fold<double>(0, (s, t) => s + t.debit);
+    final totalCredit = allTxns.fold<double>(0, (s, t) => s + t.credit);
+    final net = totalCredit - totalDebit;
+
+    final months = <String, Map<String, double>>{};
+    for (final t in allTxns) {
+      final key = '${t.txnDate.year}-${t.txnDate.month.toString().padLeft(2, '0')}';
+      months.putIfAbsent(key, () => {'debit': 0.0, 'credit': 0.0});
+      months[key]!['debit'] = (months[key]!['debit'] ?? 0) + t.debit;
+      months[key]!['credit'] = (months[key]!['credit'] ?? 0) + t.credit;
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(40),
+        header: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('BillMed - CA Report', style: pw.TextStyle(fontSize: 22, color: PdfColors.indigo, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Annual Financial Summary', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey)),
+            pw.Divider(),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        footer: (ctx) => pw.Text('Generated on ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+        build: (ctx) => [
+          pw.Header(level: 1, text: 'Summary'),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+            data: [
+              ['Total Debits', '₹${totalDebit.toStringAsFixed(2)}'],
+              ['Total Credits', '₹${totalCredit.toStringAsFixed(2)}'],
+              ['Net (Credits - Debits)', '₹${net.toStringAsFixed(2)}'],
+              ['Total Transactions', '${allTxns.length}'],
+            ],
+          ),
+          pw.SizedBox(height: 20),
+          pw.Header(level: 1, text: 'Monthly Breakdown'),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+            headerDecoration: pw.BoxDecoration(color: PdfColors.indigo50),
+            cellStyle: const pw.TextStyle(fontSize: 10),
+            headers: ['Month', 'Debits', 'Credits', 'Net'],
+            data: months.entries.map((e) => [
+              e.key,
+              '₹${(e.value['debit'] ?? 0).toStringAsFixed(2)}',
+              '₹${(e.value['credit'] ?? 0).toStringAsFixed(2)}',
+              '₹${((e.value['credit'] ?? 0) - (e.value['debit'] ?? 0)).toStringAsFixed(2)}',
+            ]).toList(),
+          ),
+        ],
+      ),
+    );
+
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/BillMed_CA_Report.pdf');
+    await file.writeAsBytes(await pdf.save());
+    await Share.shareXFiles([XFile(file.path)], text: 'CA Report');
+  }
+
   static pw.Widget _row(String label, String value) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 3),
