@@ -85,10 +85,12 @@ class BankStatementService {
     for (final line in lines) {
       final lower = line.toLowerCase();
       if (lower.contains('opening') || lower.contains('b/f')) {
-        _extractNumbers(line).lastOrNull.also((v) { openingBal = v; foundOpening = true; });
+        final v = _extractNumbers(line).lastOrNull;
+        if (v != null) { openingBal = v; foundOpening = true; }
       }
       if (lower.contains('closing') || lower.contains('c/f')) {
-        _extractNumbers(line).lastOrNull.also((v) { closingBal = v; foundClosing = true; });
+        final v = _extractNumbers(line).lastOrNull;
+        if (v != null) { closingBal = v; foundClosing = true; }
       }
       if (lower.contains('date') && (lower.contains('particular') || lower.contains('narration')) ||
           line.startsWith('---') || line.startsWith('===')) continue;
@@ -178,12 +180,5 @@ class BankStatementService {
   static List<double> _extractNumbers(String text) {
     return RegExp(r'([0-9,]+\.\d{2})').allMatches(text).map((m) =>
         double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0).toList();
-  }
-}
-
-extension _OptionalExt<T> on T? {
-  void also(void Function(T) fn) {
-    final v = this;
-    if (v != null) fn(v);
   }
 }

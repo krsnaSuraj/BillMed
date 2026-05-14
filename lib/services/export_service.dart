@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:drift/drift.dart';
 import '../database/database.dart';
 
 class ExportService {
@@ -64,22 +65,26 @@ class ExportService {
 
   static Future<void> _exportPayments(BillMedDatabase db, Directory dir, String ts) async {
     final allBills = await db.getAllBills();
-    final allPayments = <Payment>[];
-    for (final bill in allBills) {
-      allPayments.addAll(await db.getPaymentsByBill(bill.id));
-    }
+    if (allBills.isEmpty) return;
+    // Single query for all payments via bill IDs
+    final billIds = allBills.map((b) => b.id).toList();
+    final placeholders = billIds.map((_) => '?').join(',');
+    final result = await db.customSelect(
+      'SELECT * FROM payments WHERE bill_id IN ($placeholders) ORDER BY payment_date',
+      variables: billIds.map((id) => Variable.withInt(id)).toList(),
+    ).get();
     final rows = <List<String>>[
       ['ID', 'Bill ID', 'Date', 'Amount', 'Mode', 'Reference', 'Notes', 'Created At'],
-      for (final p in allPayments)
+      for (final row in result)
         [
-          p.id.toString(),
-          p.billId.toString(),
-          '${p.paymentDate.year}-${p.paymentDate.month.toString().padLeft(2, '0')}-${p.paymentDate.day.toString().padLeft(2, '0')}',
-          p.amount.toStringAsFixed(2),
-          p.mode,
-          p.referenceNo ?? '',
-          p.notes ?? '',
-          p.createdAt.toIso8601String(),
+          row.read<int>('id').toString(),
+          row.read<int>('bill_id').toString(),
+          row.read<DateTime>('payment_date').toIso8601String().substring(0, 10),
+          row.read<double>('amount').toStringAsFixed(2),
+          row.read<String>('mode'),
+          row.read<String?>('reference_no') ?? '',
+          row.read<String?>('notes') ?? '',
+          row.read<DateTime>('created_at').toIso8601String(),
         ],
     ];
     _writeAndShare(dir, 'BillMed_Payments_$ts.csv', rows);

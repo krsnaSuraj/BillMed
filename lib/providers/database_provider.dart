@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 
 final databaseProvider = Provider<BillMedDatabase>((ref) {
-  return BillMedDatabase();
+  final db = BillMedDatabase();
+  ref.onDispose(() => db.close());
+  return db;
 });
 
 final distributorListProvider = FutureProvider<List<Distributor>>((ref) async {
