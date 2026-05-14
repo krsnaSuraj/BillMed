@@ -103,7 +103,7 @@ Latest release: [github.com/krsnaSuraj/BillMed/releases/latest](https://github.c
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Flutter 3.41 (Dart) |
+| Framework | Flutter 3.41.9 (Dart 3.11) |
 | Database | Drift (SQLite ORM) |
 | State | Riverpod |
 | OCR | Google ML Kit (on-device) |
@@ -112,7 +112,7 @@ Latest release: [github.com/krsnaSuraj/BillMed/releases/latest](https://github.c
 | CI/CD | GitHub Actions |
 | Obfuscation | Flutter `--obfuscate` |
 | Min SDK | Android 6.0 (API 23) |
-| APK Size | ~89 MB |
+| APK Size | ~9 MB |
 
 ---
 
@@ -148,6 +148,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.3.0+2 | Fixed 14 analyzer warnings, improved PDF parser (FlateDecode+desktopz), BuildContext safety |
 | v2.3.0 | Gemini AI integration, bank transactions view, CA report PDF, backup fixes |
 | v2.2.2 | Bug fixes: backup crash, notification ID, N+1 query, DB leak |
 | v2.2.0 | Bank statement import with golden rule verification |
