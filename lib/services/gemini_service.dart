@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class GeminiService {
-  // Models in order of preference — auto fallback on rate limit
   static const _models = [
     'gemini-2.0-flash',
     'gemini-1.5-flash',
@@ -13,21 +13,35 @@ class GeminiService {
   static DateTime _lastReset = DateTime.now();
   static int _requestCount = 0;
 
-  static Future<String?> call({
+  /// Call Gemini REST API directly with PDF bytes (base64 encoded).
+  /// This bypasses PDF text extraction — Gemini reads the PDF natively.
+  static Future<String?> parsePdf({
     required String apiKey,
-    required String prompt,
-    required String content,
-    int maxRetries = 3,
+    required List<int> pdfBytes,
   }) async {
     if (apiKey.isEmpty) return null;
 
-    // Reset counter every minute
     if (DateTime.now().difference(_lastReset).inMinutes >= 1) {
       _requestCount = 0;
       _lastReset = DateTime.now();
     }
 
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
+    final base64 = base64Encode(pdfBytes);
+    const prompt = '''Extract ALL transactions from this PDF bank statement.
+Return ONLY a JSON array. No other text, no markdown.
+
+Each object must have:
+- date: "YYYY-MM-DD"
+- description: string
+- debit: number (0 if credit)
+- credit: number (0 if debit)
+- balance: number
+
+Example: [{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]
+
+Parse EVERY transaction. Return ONLY JSON.''';
+
+    for (int attempt = 0; attempt < 3; attempt++) {
       for (int m = 0; m < _models.length; m++) {
         final idx = (_modelIndex + m) % _models.length;
         final modelName = _models[idx];
@@ -38,88 +52,44 @@ class GeminiService {
             _requestCount = 0;
           }
 
-          final model = GenerativeModel(
-            model: modelName,
-            apiKey: apiKey,
-            generationConfig: GenerationConfig(
-              temperature: 0.1,
-              maxOutputTokens: 8192,
-            ),
+          final url = 'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey';
+          final response = await http.post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [{
+                'parts': [
+                  {'text': prompt},
+                  {'inline_data': {'mime_type': 'application/pdf', 'data': base64}}
+                ]
+              }],
+              'generationConfig': {
+                'temperature': 0.1,
+                'maxOutputTokens': 8192,
+              }
+            }),
           );
 
-          final response = await model.generateContent([
-            Content.text(prompt),
-            Content.text(content),
-          ]);
+          if (response.statusCode == 200) {
+            _requestCount++;
+            _modelIndex = idx;
 
-          _requestCount++;
-          _modelIndex = idx; // Prefer this model next time
-
-          final text = response.text;
-          if (text != null && text.isNotEmpty) return text;
-
-        } catch (e) {
-          final msg = e.toString().toLowerCase();
-
-          // Rate limited — switch model and retry
-          if (msg.contains('429') || msg.contains('rate') || msg.contains('quota') || msg.contains('resource exhausted')) {
+            final data = jsonDecode(response.body);
+            final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+            if (text != null && text.toString().isNotEmpty) return text.toString();
+          } else if (response.statusCode == 429) {
             _modelIndex = (_modelIndex + 1) % _models.length;
-            await Future.delayed(const Duration(seconds: 2));
-            continue;
+            await Future.delayed(const Duration(seconds: 3));
+          } else if (response.statusCode == 403) {
+            return null; // Invalid key
+          } else {
+            if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
           }
-
-          // Other API errors
-          if (msg.contains('api key')) return null; // Invalid key
-          if (attempt < maxRetries - 1) {
-            await Future.delayed(const Duration(seconds: 1));
-            continue;
-          }
-          return null;
+        } catch (_) {
+          if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
         }
       }
     }
     return null;
-  }
-
-  /// Parse bank statement text into structured JSON
-  static Future<String?> parseBankStatement({
-    required String apiKey,
-    required String text,
-  }) async {
-    final prompt = '''Extract ALL transactions from this bank statement text.
-Return ONLY a JSON array. No other text, no markdown, no code blocks.
-
-Each transaction must have:
-- date: "YYYY-MM-DD"
-- description: the transaction description
-- debit: number (0 if not a debit)
-- credit: number (0 if not a credit)  
-- balance: number (the running balance after this transaction)
-
-Example:
-[{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]
-
-Rules:
-- Parse EVERY single transaction
-- Return ONLY the JSON array, nothing else
-- If date is "01/04/2026" format, convert to "2026-04-01"
-- Debit means money going out, Credit means money coming in''';
-
-    return call(apiKey: apiKey, prompt: prompt, content: text);
-  }
-
-  /// Correct OCR text — fix common recognition errors
-  static Future<String?> correctOcr({
-    required String apiKey,
-    required String rawText,
-  }) async {
-    final prompt = '''Fix OCR errors in this bill text. Extract:
-- bill_number (invoice number)
-- date (DD/MM/YYYY)
-- amount (total amount)
-- supplier (company name)
-Return as JSON only: {"bill_number":"","date":"","amount":0,"supplier":""}''';
-
-    return call(apiKey: apiKey, prompt: prompt, content: rawText);
   }
 }

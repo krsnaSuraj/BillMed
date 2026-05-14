@@ -41,38 +41,35 @@ class BankStatementService {
       return BankStatementResult(status: 'FAILED', message: 'File not found', transactions: []);
     }
 
-    final text = await _extractPdfText(file);
-
-    // Try Gemini AI first if key available
-    if (geminiKey != null && geminiKey.isNotEmpty && text.isNotEmpty) {
+    // Try Gemini AI with full PDF (bypasses text extraction)
+    if (geminiKey != null && geminiKey.isNotEmpty) {
       try {
-        final aiResult = await GeminiService.parseBankStatement(apiKey: geminiKey, text: text);
+        final bytes = await file.readAsBytes();
+        final aiResult = await GeminiService.parsePdf(apiKey: geminiKey, pdfBytes: bytes);
         if (aiResult != null) {
           final parsed = _parseGeminiResponse(aiResult);
-          if (parsed != null && parsed.transactions.isNotEmpty) {
-            return parsed;
-          }
+          if (parsed != null && parsed.transactions.isNotEmpty) return parsed;
         }
       } catch (_) {}
     }
 
-    // Fallback: regex parser
+    // Fallback: regex parser on extracted text
+    final text = await _extractPdfText(file);
     if (text.isNotEmpty) {
       final result = _parseTransactions(text);
       if (result.transactions.isNotEmpty) return result;
     }
 
-    return BankStatementResult(status: 'FAILED', message: 'Could not parse statement', transactions: []);
+    return BankStatementResult(status: 'FAILED', message: 'Could not parse statement. Try manual entry.', transactions: []);
   }
 
   static BankStatementResult? _parseGeminiResponse(String jsonText) {
     try {
-      // Try to extract JSON array from the response (handles markdown-wrapped responses)
       final arrayMatch = RegExp(r'\[[\s\S]*?\]').firstMatch(jsonText);
       final jsonStr = arrayMatch?.group(0) ?? jsonText;
-      
       final list = jsonDecode(jsonStr) as List;
       if (list.isEmpty) return null;
+
       final txns = list.map((t) => ParsedTransaction(
         txnDate: _parseDate(t['date']?.toString() ?? ''),
         description: t['description']?.toString() ?? '',
@@ -100,6 +97,10 @@ class BankStatementService {
 
   static DateTime _parseDate(String str) {
     try {
+      if (str.contains('-')) {
+        final d = DateTime.tryParse(str);
+        if (d != null) return d;
+      }
       final parts = str.split(RegExp(r'[\/\-]'));
       if (parts.length >= 3) {
         var y = int.parse(parts[2]);
@@ -122,16 +123,6 @@ class BankStatementService {
           buffer.writeln(text.replaceAll(RegExp(r'\\[0-9]{3}'), '').trim());
         }
       }
-      if (buffer.isEmpty) {
-        final btPattern = RegExp(r'BT([\s\S]*?)ET');
-        for (final match in btPattern.allMatches(str)) {
-          final tjPattern = RegExp(r'\(([^)]*)\)\s*Tj');
-          for (final tj in tjPattern.allMatches(match.group(1)!)) {
-            final t = tj.group(1)!.trim();
-            if (t.length > 2) buffer.writeln(t);
-          }
-        }
-      }
       return buffer.toString();
     } catch (_) {
       return '';
@@ -148,11 +139,11 @@ class BankStatementService {
     for (final line in lines) {
       final lower = line.toLowerCase();
       if (lower.contains('opening') || lower.contains('b/f')) {
-        final v = _extractNumbers(line).lastOrNull;
+        final v = _numbers(line).lastOrNull;
         if (v != null) { openingBal = v; foundOpening = true; }
       }
       if (lower.contains('closing') || lower.contains('c/f')) {
-        final v = _extractNumbers(line).lastOrNull;
+        final v = _numbers(line).lastOrNull;
         if (v != null) { closingBal = v; foundClosing = true; }
       }
       if (lower.contains('date') && (lower.contains('particular') || lower.contains('narration')) ||
@@ -165,7 +156,7 @@ class BankStatementService {
         var y = int.parse(dateMatch.group(3)!);
         if (y < 100) y += 2000;
         final date = DateTime(y, int.parse(dateMatch.group(2)!), int.parse(dateMatch.group(1)!));
-        final amounts = _extractNumbers(line);
+        final amounts = _numbers(line);
         if (amounts.isEmpty) continue;
 
         final desc = line.replaceAll(dateMatch.group(0)!, '').replaceAll(RegExp(r'[0-9,]+\.\d{2}'), '')
@@ -186,7 +177,6 @@ class BankStatementService {
         } else {
           balance = amounts[0];
         }
-
         transactions.add(ParsedTransaction(txnDate: date, description: desc, debit: debit, credit: credit, balance: balance));
       } catch (_) {}
     }
@@ -195,18 +185,12 @@ class BankStatementService {
       return BankStatementResult(status: 'FAILED', message: 'No transactions found in PDF', transactions: []);
     }
 
-    // Running balance check — strict
     int balanceErrors = 0;
     for (int i = 1; i < transactions.length; i++) {
-      final prev = transactions[i - 1];
-      final curr = transactions[i];
-      final expected = prev.balance + curr.credit - curr.debit;
-      if ((expected - curr.balance).abs() > 10) {
-        balanceErrors++;
-      }
+      final expected = transactions[i - 1].balance + transactions[i].credit - transactions[i].debit;
+      if ((expected - transactions[i].balance).abs() > 10) balanceErrors++;
     }
 
-    // Golden rule check
     final totalDebit = transactions.fold<double>(0, (s, t) => s + t.debit);
     final totalCredit = transactions.fold<double>(0, (s, t) => s + t.credit);
 
@@ -217,16 +201,16 @@ class BankStatementService {
       final expectedClose = openingBal + totalCredit - totalDebit;
       if ((expectedClose - closingBal).abs() < 10 && balanceErrors == 0) {
         status = 'VERIFIED';
-        message = '${transactions.length} transactions — balance verified';
+        message = '${transactions.length} transactions - balance verified';
       } else {
-        message = 'Balance mismatch. Expected closing: ₹${expectedClose.toStringAsFixed(0)}';
+        message = 'Balance mismatch. Expected closing: \u20B9${expectedClose.toStringAsFixed(0)}';
       }
     } else if (balanceErrors == 0 && transactions.length > 1) {
       status = 'VERIFIED';
-      message = '${transactions.length} transactions — running balance OK';
+      message = '${transactions.length} transactions - running balance OK';
     } else if (balanceErrors < transactions.length * 0.3) {
       status = 'FAILED';
-      message = '$balanceErrors balance mismatches found. Manual entry suggested.';
+      message = '$balanceErrors balance mismatches found. Try manual entry.';
     } else {
       message = 'Could not verify balances. Try manual entry.';
     }
@@ -240,7 +224,7 @@ class BankStatementService {
     );
   }
 
-  static List<double> _extractNumbers(String text) {
+  static List<double> _numbers(String text) {
     return RegExp(r'([0-9,]+\.\d{2})').allMatches(text).map((m) =>
         double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0).toList();
   }
