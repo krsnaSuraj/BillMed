@@ -5,7 +5,9 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../payments/add_payment_screen.dart';
 import 'add_bill_screen.dart';
+import 'bill_list_screen.dart';
 import '../../services/pdf_export_service.dart';
+import '../dashboard/dashboard_screen.dart';
 
 final _billProvider = FutureProvider.family<Bill?, int>((ref, id) async {
   final db = ref.watch(databaseProvider);
@@ -61,6 +63,8 @@ class BillDetailScreen extends ConsumerWidget {
                     ref.invalidate(_billProvider(billId));
                     ref.invalidate(_paymentsProvider(billId));
                     ref.invalidate(paidAmountProvider(billId));
+                    ref.invalidate(allBillsProvider);
+                    ref.invalidate(dashboardProvider);
                   }
                 }
               },
@@ -114,6 +118,9 @@ class BillDetailScreen extends ConsumerWidget {
               final payments = await db.getPaymentsByBill(billId);
               for (final p in payments) { await db.deletePayment(p.id); }
               await db.deleteBill(billId);
+              // Refresh all dependent providers after deletion
+              ref.invalidate(allBillsProvider);
+              ref.invalidate(dashboardProvider);
               if (context.mounted) Navigator.pop(context, true);
             },
             child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
@@ -307,9 +314,17 @@ class BillDetailScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.edit, color: AppColors.info),
               title: const Text('Edit Payment'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId, payment: p)));
+                final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddPaymentScreen(billId: billId, payment: p)),
+                );
+                if (result == true) {
+                  ref.invalidate(_paymentsProvider(billId));
+                  ref.invalidate(paidAmountProvider(billId));
+                  ref.invalidate(dashboardProvider);
+                }
               },
             ),
             ListTile(
@@ -340,6 +355,8 @@ class BillDetailScreen extends ConsumerWidget {
               await ref.read(databaseProvider).deletePayment(p.id);
               ref.invalidate(_paymentsProvider(billId));
               ref.invalidate(paidAmountProvider(billId));
+              ref.invalidate(allBillsProvider);
+              ref.invalidate(dashboardProvider);
             },
             child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
           ),

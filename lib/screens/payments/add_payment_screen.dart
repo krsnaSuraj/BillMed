@@ -5,6 +5,8 @@ import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../models/enums.dart';
 import '../../theme/app_theme.dart';
+import '../dashboard/dashboard_screen.dart';
+import '../bills/bill_list_screen.dart';
 
 class AddPaymentScreen extends ConsumerStatefulWidget {
   final int billId;
@@ -157,7 +159,11 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
           notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
         ));
       }
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        ref.invalidate(dashboardProvider);
+        ref.invalidate(allBillsProvider);
+        Navigator.pop(context, true);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

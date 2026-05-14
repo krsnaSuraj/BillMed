@@ -5,6 +5,7 @@ import '../../database/database.dart';
 import '../../providers/database_provider.dart';
 import '../../services/bank_statement_service.dart';
 import '../../theme/app_theme.dart';
+import '../bank_import/bank_view_screen.dart';
 
 class BankPreviewScreen extends ConsumerWidget {
   final List<ParsedTransaction> transactions;
@@ -127,6 +128,25 @@ class BankPreviewScreen extends ConsumerWidget {
   }
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
+    // Warn if data is not fully verified
+    if (status != 'VERIFIED' && context.mounted) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Save Unverified Data?'),
+          content: Text(
+            message.isNotEmpty
+                ? '$message\n\nDo you still want to save these transactions?'
+                : 'Balance could not be verified. Do you want to save anyway?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save Anyway')),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
     try {
       final db = ref.read(databaseProvider);
       for (final t in transactions) {
@@ -140,6 +160,7 @@ class BankPreviewScreen extends ConsumerWidget {
         ));
       }
       if (context.mounted) {
+        ref.invalidate(bankTxnsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${transactions.length} transactions imported successfully')),
         );

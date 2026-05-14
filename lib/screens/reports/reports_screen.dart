@@ -21,9 +21,10 @@ final turnoverProvider = FutureProvider<Map<String, double>>((ref) async {
   return result;
 });
 
-final overdueCountProvider = FutureProvider<int>((ref) async {
+final _reportOverdueCountProvider = FutureProvider<int>((ref) async {
   final db = ref.watch(databaseProvider);
   final allBills = await db.getAllBills();
+  if (allBills.isEmpty) return 0;
   final paidMap = await db.getTotalPaidForBills(allBills.map((b) => b.id).toList());
   return allBills.where((b) {
     final paid = paidMap[b.id] ?? 0.0;
@@ -38,7 +39,7 @@ class ReportsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(reportProvider);
     final turnoverAsync = ref.watch(turnoverProvider);
-    final overdueAsync = ref.watch(overdueCountProvider);
+    final overdueAsync = ref.watch(_reportOverdueCountProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),

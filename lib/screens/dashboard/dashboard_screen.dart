@@ -117,7 +117,7 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(width: 8),
           _countChip(Icons.receipt, '${data.totalBills}', 'Bills', AppColors.accent),
           const SizedBox(width: 8),
-          _countChip(Icons.payment, '${data.totalDistributors}', 'Paid', AppColors.success),
+          _countChip(Icons.payment, '${data.distributorBalances.fold<int>(0, (s, d) => s + d.paidBillCount)}', 'Paid', AppColors.success),
         ],
       ),
     );

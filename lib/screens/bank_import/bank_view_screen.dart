@@ -38,6 +38,11 @@ class _BankViewScreenState extends ConsumerState<BankViewScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(bankTxnsProvider),
           ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            tooltip: 'Clear All Transactions',
+            onPressed: () => _confirmClearAll(context, ref),
+          ),
         ],
       ),
       body: Column(
@@ -144,6 +149,28 @@ class _BankViewScreenState extends ConsumerState<BankViewScreen> {
               error: (e, _) => Center(child: Text('$e')),
               loading: () => const Center(child: CircularProgressIndicator()),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClearAll(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear All Transactions?'),
+        content: const Text('This will permanently delete all imported bank transactions. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final db = ref.read(databaseProvider);
+              await db.deleteAllBankTransactions();
+              ref.invalidate(bankTxnsProvider);
+            },
+            child: const Text('Delete All', style: TextStyle(color: AppColors.danger)),
           ),
         ],
       ),

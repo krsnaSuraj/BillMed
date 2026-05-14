@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
+import '../dashboard/dashboard_screen.dart';
 
 class AddDistributorScreen extends ConsumerStatefulWidget {
   final Distributor? distributor;
@@ -57,7 +58,11 @@ class _AddDistributorScreenState extends ConsumerState<AddDistributorScreen> {
           phone: Value<String?>(_phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim()),
         ));
       }
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        ref.invalidate(dashboardProvider);
+        ref.invalidate(distributorListProvider);
+        Navigator.pop(context, true);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

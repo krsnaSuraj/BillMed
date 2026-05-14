@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../../database/database.dart';
 import '../../providers/database_provider.dart';
+import '../dashboard/dashboard_screen.dart';
 
 class AddBillScreen extends ConsumerStatefulWidget {
   final int? distributorId;
@@ -162,7 +163,10 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
           notes: Value<String?>(_notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim()),
         ));
       }
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        ref.invalidate(dashboardProvider);
+        Navigator.pop(context, true);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

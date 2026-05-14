@@ -6,6 +6,8 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import 'add_distributor_screen.dart';
 import 'distributor_detail_screen.dart';
+import '../dashboard/dashboard_screen.dart';
+import '../bills/bill_list_screen.dart';
 
 final distributorBalancesProvider = FutureProvider<List<DistributorBalance>>((ref) async {
   final db = ref.watch(databaseProvider);
@@ -191,6 +193,8 @@ class _DistributorListScreenState extends ConsumerState<DistributorListScreen> {
               }
               await db.deleteDistributor(d.id);
               ref.invalidate(distributorBalancesProvider);
+              ref.invalidate(dashboardProvider);
+              ref.invalidate(allBillsProvider);
             },
             child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
           ),

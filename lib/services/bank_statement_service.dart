@@ -66,6 +66,15 @@ class BankStatementService {
     return BankStatementResult(status: 'FAILED', message: 'Could not parse statement. Try manual entry.', transactions: []);
   }
 
+  /// Safely convert a JSON value to double
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
   static BankStatementResult? _parseGeminiResponse(String jsonText) {
     try {
       // Extract JSON array - use greedy match to get full array
@@ -80,9 +89,9 @@ class BankStatementService {
       final txns = list.map((t) => ParsedTransaction(
         txnDate: _parseDate(t['date']?.toString() ?? ''),
         description: t['description']?.toString() ?? '',
-        debit: (t['debit'] ?? 0).runtimeType == double ? t['debit'] as double : double.tryParse(t['debit']?.toString() ?? '0') ?? 0,
-        credit: (t['credit'] ?? 0).runtimeType == double ? t['credit'] as double : double.tryParse(t['credit']?.toString() ?? '0') ?? 0,
-        balance: (t['balance'] ?? 0).runtimeType == double ? t['balance'] as double : double.tryParse(t['balance']?.toString() ?? '0') ?? 0,
+        debit: _toDouble(t['debit']),
+        credit: _toDouble(t['credit']),
+        balance: _toDouble(t['balance']),
       )).toList();
 
       if (txns.isEmpty) return null;
@@ -104,15 +113,28 @@ class BankStatementService {
 
   static DateTime _parseDate(String str) {
     try {
-      if (str.contains('-')) {
-        final d = DateTime.tryParse(str);
+      final trimmed = str.trim();
+      if (trimmed.isEmpty) return DateTime.now();
+
+      // Try ISO format first (YYYY-MM-DD)
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(trimmed)) {
+        final d = DateTime.tryParse(trimmed);
         if (d != null) return d;
       }
-      final parts = str.split(RegExp(r'[\/\-]'));
+
+      // Try DD/MM/YYYY or DD-MM-YYYY
+      final parts = trimmed.split(RegExp(r'[\/\-]'));
       if (parts.length >= 3) {
-        var y = int.parse(parts[2]);
-        if (y < 100) y += 2000;
-        return DateTime(y, int.parse(parts[1]), int.parse(parts[0]));
+        var d = int.tryParse(parts[0]);
+        var m = int.tryParse(parts[1]);
+        var y = int.tryParse(parts[2]);
+        if (d != null && m != null && y != null) {
+          if (y < 100) y += 2000;
+          // Validate ranges
+          if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+            return DateTime(y, m, d);
+          }
+        }
       }
     } catch (_) {}
     return DateTime.now();
@@ -355,6 +377,7 @@ class BankStatementService {
         final desc = line.replaceAll(dateMatch.group(0)!, '').replaceAll(RegExp(r'[0-9,]+\.\d{2}'), '')
             .replaceAll(RegExp(r'\s+'), ' ').trim();
         double debit = 0, credit = 0, balance = 0;
+
         final isDebit = lower.contains('/dr/') || lower.contains('neft dr') || lower.contains('debit') ||
             lower.contains('withdrawal') || lower.contains('atm') ||
             lower.contains('transfer') || lower.contains('chq') || lower.contains('ift') ||
@@ -364,10 +387,21 @@ class BankStatementService {
             lower.contains('deposit') || lower.contains('interest') || lower.contains('refund') ||
             lower.contains('by ') || lower.contains('cash deposit') || lower.contains('upi/cr'));
 
-        if (amounts.length == 3) {
-          balance = amounts[2];
-          if (isDebit) { debit = amounts[1]; credit = amounts[0]; }
-          else { credit = amounts[1]; debit = amounts[0]; }
+        if (amounts.length >= 3) {
+          // Standard bank format: debit | credit | balance
+          // One of debit or credit will be 0 depending on transaction type
+          balance = amounts.last;
+          if (isDebit) {
+            debit = amounts[amounts.length - 2];
+            credit = 0;
+          } else if (isCredit) {
+            credit = amounts[amounts.length - 2];
+            debit = 0;
+          } else {
+            // Guess: if last two before balance differ, pick the non-zero one
+            debit = amounts[amounts.length - 3];
+            credit = amounts[amounts.length - 2];
+          }
         } else if (amounts.length == 2) {
           balance = amounts[1];
           if (isDebit) { debit = amounts[0]; }
@@ -402,15 +436,18 @@ class BankStatementService {
         status = 'VERIFIED';
         message = '${transactions.length} transactions - balance verified';
       } else {
-        message = 'Balance mismatch. Expected closing: \u20B9${expectedClose.toStringAsFixed(0)}';
+        // BUG FIX: was showing unicode escape \u20B9 in error, now properly formatted
+        status = 'FAILED';
+        message = 'Balance mismatch. Expected closing: ₹${expectedClose.toStringAsFixed(2)}';
       }
     } else if (balanceErrors == 0 && transactions.length > 1) {
       status = 'VERIFIED';
       message = '${transactions.length} transactions - running balance OK';
     } else if (balanceErrors < transactions.length * 0.3) {
-      status = 'FAILED';
-      message = '$balanceErrors balance mismatches found. Try manual entry.';
+      status = 'PARTIAL';
+      message = '$balanceErrors balance mismatches found. Review before saving.';
     } else {
+      status = 'FAILED';
       message = 'Could not verify balances. Try manual entry.';
     }
 
@@ -424,6 +461,7 @@ class BankStatementService {
   }
 
   static List<double> _numbers(String text) {
+    // Remove dates first to avoid parsing date numbers as amounts
     final cleaned = text.replaceAll(RegExp(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}'), '');
     return RegExp(r'([0-9,]+\.\d{2})').allMatches(cleaned).map((m) =>
         double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0).toList();
