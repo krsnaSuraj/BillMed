@@ -201,39 +201,67 @@ class BankStatementService {
   static String _extractPdfOperators(String content) {
     final buffer = StringBuffer();
 
-    // TJ arrays: [(text) num (text) ...] TJ
-    for (final match in RegExp(r'\[(.*?)\]\s*TJ').allMatches(content)) {
-      for (final part in RegExp(r'\(([^)]*)\)').allMatches(match.group(1)!)) {
-        final text = part.group(1)!
-            .replaceAll('\\n', '\n').replaceAll('\\r', '\r')
-            .replaceAll('\\t', '\t').replaceAll('\\(', '(')
-            .replaceAll('\\)', ')').replaceAll('\\\\', '\\');
-        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
-          buffer.write('${text.trim()} ');
+    // Extract text within BT...ET blocks preserving structure
+    final btEtPattern = RegExp(r'BT(.*?)ET', dotAll: true);
+    for (final block in btEtPattern.allMatches(content)) {
+      final blockText = block.group(1)!;
+
+      // TJ arrays: [(text) num (text) ...] TJ
+      for (final match in RegExp(r'\[(.*?)\]\s*TJ').allMatches(blockText)) {
+        for (final part in RegExp(r'\(([^)]*)\)').allMatches(match.group(1)!)) {
+          final text = _cleanPdfString(part.group(1)!);
+          if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+            buffer.write('${text.trim()} ');
+          }
         }
       }
+
+      // Tj operators: (text) Tj
+      for (final match in RegExp(r'\(([^)]*)\)\s*Tj').allMatches(blockText)) {
+        final text = _cleanPdfString(match.group(1)!);
+        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+          buffer.writeln(text.trim());
+        }
+      }
+
+      // Quote operator: (text) '
+      for (final match in RegExp(r"\(([^)]*)\)\s*'").allMatches(blockText)) {
+        final text = _cleanPdfString(match.group(1)!);
+        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+          buffer.writeln(text.trim());
+        }
+      }
+
+      buffer.writeln();
     }
 
-    // Tj operators: (text) Tj
-    for (final match in RegExp(r'\(([^)]*)\)\s*Tj').allMatches(content)) {
-      final text = match.group(1)!
-          .replaceAll('\\n', '\n').replaceAll('\\r', '\r')
-          .replaceAll('\\t', '\t').replaceAll('\\(', '(')
-          .replaceAll('\\)', ')').replaceAll('\\\\', '\\');
-      if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
-        buffer.writeln(text.trim());
+    // Fallback: extract any parenthesized text with meaningful content
+    if (buffer.toString().trim().isEmpty) {
+      for (final match in RegExp(r'\(([^)]*)\)').allMatches(content)) {
+        final text = _cleanPdfString(match.group(1)!);
+        if (text.length > 3 && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+          buffer.writeln(text.trim());
+        }
       }
     }
 
     return buffer.toString().trim();
   }
 
+  static String _cleanPdfString(String s) {
+    return s
+        .replaceAll('\\n', '\n').replaceAll('\\r', '\r')
+        .replaceAll('\\t', '\t').replaceAll('\\(', '(')
+        .replaceAll('\\)', ')').replaceAll('\\\\', '\\')
+        .replaceAll(RegExp(r'\\[0-9]{3}'), '');
+  }
+
   static String _extractParenthesizedText(String str) {
     final buffer = StringBuffer();
     for (final match in RegExp(r'\(([^)]*)\)').allMatches(str)) {
-      final text = match.group(1)!;
+      final text = _cleanPdfString(match.group(1)!);
       if (text.length > 2 && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
-        buffer.writeln(text.replaceAll(RegExp(r'\\[0-9]{3}'), '').trim());
+        buffer.writeln(text.trim());
       }
     }
     return buffer.toString();
@@ -246,7 +274,6 @@ class BankStatementService {
     final buffer = StringBuffer();
     bool inTransaction = false;
     String? ocBuffer;
-    bool isOcLine = false;
 
     for (final line in lines) {
       final lower = line.toLowerCase().trim();
@@ -256,33 +283,21 @@ class BankStatementService {
           lower.startsWith('disclaimer') || lower.startsWith('end of') ||
           lower.startsWith('unless the')) { continue; }
 
-      // Detect opening/closing balance lines (may be split across lines)
-      if (lower.contains('opening') || lower.contains('closing') ||
-          lower.startsWith('balance') || lower.startsWith('rs.')) {
+      // Opening/closing balance - detect across multiple lines
+      if (ocBuffer != null || lower.contains('opening') ||
+          lower.contains('closing') || lower.startsWith('balance') ||
+          lower.startsWith('rs.')) {
         ocBuffer ??= '';
         ocBuffer = '$ocBuffer $line'.trim();
-        isOcLine = true;
         if (hasDecimalAmount.hasMatch(ocBuffer)) {
           merged.add(ocBuffer);
           ocBuffer = null;
-          isOcLine = false;
         }
         continue;
       }
-      if (isOcLine && ocBuffer != null) {
-        ocBuffer = '$ocBuffer $line'.trim();
-        if (hasDecimalAmount.hasMatch(ocBuffer)) {
-          merged.add(ocBuffer);
-          ocBuffer = null;
-          isOcLine = false;
-        }
-        continue;
-      }
-      ocBuffer = null;
-      isOcLine = false;
 
       if (dateAtStart.hasMatch(line)) {
-        if (inTransaction) {
+        if (inTransaction && buffer.isNotEmpty) {
           merged.add(buffer.toString().trim());
           buffer.clear();
         }
