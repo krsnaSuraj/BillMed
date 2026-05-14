@@ -7,7 +7,6 @@ import '../bills/add_bill_screen.dart';
 import '../bills/bill_detail_screen.dart';
 import '../scanner/bill_scanner.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../services/bank_statement_service.dart';
 
 final _billsProvider = FutureProvider.family<List<Bill>, int>((ref, distId) async {
   final db = ref.watch(databaseProvider);
