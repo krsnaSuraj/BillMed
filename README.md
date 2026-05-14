@@ -148,6 +148,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.3.6 | Final cleanup: removed unused imports, cross-verified all 33 files, zero issues |
 | v2.3.5 | Fix: opening/closing balance detection for multi-line PDF text, merge stability |
 | v2.3.4 | CA Report PDF: full transaction list with opening/closing balance, CSV-compatible |
 | v2.3.3 | Canara bank statement fix: line merging, UPI/CR keyword corrected |
