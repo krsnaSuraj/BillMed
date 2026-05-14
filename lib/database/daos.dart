@@ -66,33 +66,32 @@ class BillMedDao {
         totalAmount: 0,
         totalPaid: 0,
         totalPending: 0,
-        distributorBalances: distributors.map((d) {
-          return DistributorBalance(
-            distributor: d,
-            billedAmount: 0,
-            paidAmount: 0,
-            pendingAmount: 0,
-            billCount: 0,
-            paidBillCount: 0,
-          );
-        }).toList(),
+        distributorBalances: distributors.map((d) => DistributorBalance(
+          distributor: d,
+          billedAmount: 0,
+          paidAmount: 0,
+          pendingAmount: 0,
+          billCount: 0,
+          paidBillCount: 0,
+        )).toList(),
       );
     }
 
     final billIds = allBills.map((b) => b.id).toList();
     final paidMap = await db.getTotalPaidForBills(billIds);
 
+    // Single pass: calculate per-distributor and totals simultaneously
+    final distMap = <int, List<Bill>>{};
     double totalAmount = 0;
     double totalPaid = 0;
-    final distMap = <int, List<Bill>>{};
+
     for (final b in allBills) {
       totalAmount += b.amount;
       totalPaid += paidMap[b.id] ?? 0.0;
       distMap.putIfAbsent(b.distributorId, () => []).add(b);
     }
 
-    final balances = <DistributorBalance>[];
-    for (final d in distributors) {
+    final balances = distributors.map((d) {
       final ddBills = distMap[d.id] ?? [];
       double billed = 0;
       double paid = 0;
@@ -105,15 +104,15 @@ class BillMedDao {
         count++;
         if (bp >= b.amount) paidCount++;
       }
-      balances.add(DistributorBalance(
+      return DistributorBalance(
         distributor: d,
         billedAmount: billed,
         paidAmount: paid,
         pendingAmount: billed - paid,
         billCount: count,
         paidBillCount: paidCount,
-      ));
-    }
+      );
+    }).toList();
 
     return DashboardSummary(
       totalDistributors: distributors.length,

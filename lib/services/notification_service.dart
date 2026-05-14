@@ -39,7 +39,7 @@ class NotificationService {
           : '${overdue.length} bills totalling ₹${totalAmount.toStringAsFixed(0)} are overdue';
 
       await _plugin.show(
-        0,
+        DateTime.now().millisecondsSinceEpoch.remainder(2147483647).abs(), // unique ID
         'Overdue Bills Reminder',
         message,
         const NotificationDetails(

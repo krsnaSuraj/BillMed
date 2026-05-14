@@ -64,8 +64,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final success = await BackupService.importBackup(db);
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Backup restored. Restart the app.')),
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Restore Complete'),
+              content: const Text('Backup restored. Please restart the app for changes to take effect.'),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
