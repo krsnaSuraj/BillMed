@@ -148,7 +148,8 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
-| v2.3.0+2 | Fixed 14 analyzer warnings, improved PDF parser (FlateDecode+desktopz), BuildContext safety |
+| v2.3.1 | Release build — all fixes included, CI/CD release fix |
+| v2.3.0+2 | Fixed 14 analyzer warnings, improved PDF parser (FlateDecode+zlib), BuildContext safety |
 | v2.3.0 | Gemini AI integration, bank transactions view, CA report PDF, backup fixes |
 | v2.2.2 | Bug fixes: backup crash, notification ID, N+1 query, DB leak |
 | v2.2.0 | Bank statement import with golden rule verification |
