@@ -112,7 +112,9 @@ class PdfExportService {
   }
 
   static Future<void> generateCaReportPdf(BillMedDatabase db) async {
-    final allTxns = await db.getAllBankTransactions();
+    var allTxns = await db.getAllBankTransactions();
+    allTxns.sort((a, b) => a.txnDate.compareTo(b.txnDate));
+
     final pdf = pw.Document();
 
     final totalDebit = allTxns.fold<double>(0, (s, t) => s + t.debit);
@@ -134,7 +136,7 @@ class PdfExportService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text('BillMed - CA Report', style: pw.TextStyle(fontSize: 22, color: PdfColors.indigo, fontWeight: pw.FontWeight.bold)),
-            pw.Text('Annual Financial Summary', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey)),
+            pw.Text('Bank Statement Summary', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey)),
             pw.Divider(),
             pw.SizedBox(height: 8),
           ],
@@ -143,16 +145,57 @@ class PdfExportService {
             style: pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
         build: (ctx) => [
           pw.Header(level: 1, text: 'Summary'),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
-            data: [
-              ['Total Debits', '₹${totalDebit.toStringAsFixed(2)}'],
-              ['Total Credits', '₹${totalCredit.toStringAsFixed(2)}'],
-              ['Net (Credits - Debits)', '₹${net.toStringAsFixed(2)}'],
-              ['Total Transactions', '${allTxns.length}'],
-            ],
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              children: [
+                _row('Total Transactions', '${allTxns.length}'),
+                pw.Divider(),
+                _row('Total Debits', '₹${totalDebit.toStringAsFixed(2)}'),
+                _row('Total Credits', '₹${totalCredit.toStringAsFixed(2)}'),
+                _row('Net (Credits - Debits)', '₹${net.toStringAsFixed(2)}'),
+              ],
+            ),
           ),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 24),
+
+          if (allTxns.isNotEmpty) ...[
+            pw.Header(level: 1, text: 'Transaction Details'),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+              ),
+              child: pw.Column(
+                children: [
+                  _row('Opening Balance', '₹${(allTxns.first.balance - allTxns.first.credit + allTxns.first.debit).toStringAsFixed(2)}'),
+                  _row('Closing Balance', '₹${allTxns.last.balance.toStringAsFixed(2)}'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            pw.TableHelper.fromTextArray(
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+              headerDecoration: pw.BoxDecoration(color: PdfColors.indigo50),
+              cellStyle: const pw.TextStyle(fontSize: 7),
+              columnWidths: {0: const pw.FixedColumnWidth(60), 1: const pw.FlexColumnWidth(), 2: const pw.FixedColumnWidth(55), 3: const pw.FixedColumnWidth(55), 4: const pw.FixedColumnWidth(55)},
+              headers: ['Date', 'Description', 'Debit', 'Credit', 'Balance'],
+              data: allTxns.map((t) => [
+                DateFormat('dd/MM/yy').format(t.txnDate),
+                t.description.length > 40 ? '${t.description.substring(0, 40)}...' : t.description,
+                t.debit > 0 ? '₹${t.debit.toStringAsFixed(2)}' : '',
+                t.credit > 0 ? '₹${t.credit.toStringAsFixed(2)}' : '',
+                '₹${t.balance.toStringAsFixed(2)}',
+              ]).toList(),
+            ),
+            pw.SizedBox(height: 20),
+          ],
+
           pw.Header(level: 1, text: 'Monthly Breakdown'),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
