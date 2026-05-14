@@ -112,7 +112,7 @@ Latest release: [github.com/krsnaSuraj/BillMed/releases/latest](https://github.c
 | CI/CD | GitHub Actions |
 | Obfuscation | Flutter `--obfuscate` |
 | Min SDK | Android 6.0 (API 23) |
-| APK Size | ~9 MB |
+| APK Size | ~89 MB |
 
 ---
 
