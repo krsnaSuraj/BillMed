@@ -5,6 +5,9 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../bills/add_bill_screen.dart';
 import '../bills/bill_detail_screen.dart';
+import '../scanner/bill_scanner.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../services/bank_statement_service.dart';
 
 final _billsProvider = FutureProvider.family<List<Bill>, int>((ref, distId) async {
   final db = ref.watch(databaseProvider);
@@ -21,7 +24,16 @@ class DistributorDetailScreen extends ConsumerWidget {
     final billsAsync = ref.watch(_billsProvider(distributorId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Supplier Details')),
+      appBar: AppBar(
+        title: const Text('Supplier Details'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner),
+            tooltip: 'Scan Bill',
+            onPressed: () => _scanBill(context, ref),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(distributorId: distributorId)));
@@ -152,6 +164,41 @@ class DistributorDetailScreen extends ConsumerWidget {
   }
 }
 
+Future<void> _scanBill(BuildContext context, WidgetRef ref) async {
+  final source = await showDialog<ImageSource>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Scan Bill'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, ImageSource.camera), child: const Text('Camera')),
+        TextButton(onPressed: () => Navigator.pop(ctx, ImageSource.gallery), child: const Text('Gallery')),
+      ],
+    ),
+  );
+  if (source == null || !context.mounted) return;
+  BillScanResult? result;
+  if (source == ImageSource.camera) {
+    result = await BillScanner.scanFromCamera(context);
+  } else {
+    result = await BillScanner.scanFromGallery(context);
+  }
+  if (result == null || !context.mounted) return;
+  final confirmed = await Navigator.push<BillScanResult>(
+    context,
+    MaterialPageRoute(builder: (_) => ScanPreviewScreen(result: result!)),
+  );
+  if (confirmed != null && context.mounted) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AddBillScreen(
+        prefillNumber: confirmed.billNumber,
+        prefillAmount: confirmed.amount,
+        prefillDate: confirmed.billDate,
+      )),
+    );
+  }
+}
+
 class StatusBadgeWidget extends ConsumerWidget {
   final int billId;
   const StatusBadgeWidget({super.key, required this.billId});
@@ -164,7 +211,7 @@ class StatusBadgeWidget extends ConsumerWidget {
         final color = status == 'Paid' ? AppColors.success : status == 'Partial' ? AppColors.warning : AppColors.danger;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
           child: Text(status, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
         );
       },

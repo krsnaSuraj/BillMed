@@ -85,7 +85,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
                 ],
                 TextFormField(
                   controller: _billNoCtrl,
-                  decoration: const InputDecoration(labelText: 'Bill Number *', hintText: 'e.g. INV/2026-27/001', prefixIcon: Icon(Icons.receipt)),
+                  decoration: const InputDecoration(labelText: 'Invoice No *', hintText: 'e.g. INV/2026-27/001', prefixIcon: Icon(Icons.receipt)),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 16),

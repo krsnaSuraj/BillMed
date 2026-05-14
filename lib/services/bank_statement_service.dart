@@ -67,9 +67,12 @@ class BankStatementService {
 
   static BankStatementResult? _parseGeminiResponse(String jsonText) {
     try {
-      final jsonMatch = RegExp(r'\[[\s\S]*\]').firstMatch(jsonText);
-      if (jsonMatch == null) return null;
-      final list = jsonDecode(jsonMatch.group(0)!) as List;
+      // Try to extract JSON array from the response (handles markdown-wrapped responses)
+      final arrayMatch = RegExp(r'\[[\s\S]*?\]').firstMatch(jsonText);
+      final jsonStr = arrayMatch?.group(0) ?? jsonText;
+      
+      final list = jsonDecode(jsonStr) as List;
+      if (list.isEmpty) return null;
       final txns = list.map((t) => ParsedTransaction(
         txnDate: _parseDate(t['date']?.toString() ?? ''),
         description: t['description']?.toString() ?? '',

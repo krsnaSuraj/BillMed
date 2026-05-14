@@ -86,17 +86,24 @@ class GeminiService {
     required String apiKey,
     required String text,
   }) async {
-    final prompt = '''Extract ALL transactions from this bank statement. Return ONLY valid JSON array:
-[
-  {
-    "date": "YYYY-MM-DD",
-    "description": "transaction description",
-    "debit": number (0 if credit),
-    "credit": number (0 if debit),
-    "balance": number
-  }
-]
-Rules: Parse EVERY transaction. Return ONLY JSON. No other text.''';
+    final prompt = '''Extract ALL transactions from this bank statement text.
+Return ONLY a JSON array. No other text, no markdown, no code blocks.
+
+Each transaction must have:
+- date: "YYYY-MM-DD"
+- description: the transaction description
+- debit: number (0 if not a debit)
+- credit: number (0 if not a credit)  
+- balance: number (the running balance after this transaction)
+
+Example:
+[{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]
+
+Rules:
+- Parse EVERY single transaction
+- Return ONLY the JSON array, nothing else
+- If date is "01/04/2026" format, convert to "2026-04-01"
+- Debit means money going out, Credit means money coming in''';
 
     return call(apiKey: apiKey, prompt: prompt, content: text);
   }

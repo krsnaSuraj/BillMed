@@ -48,7 +48,7 @@ class ExportService {
     final dists = await db.getAllDistributors();
     final distMap = {for (final d in dists) d.id: d.name};
     final rows = <List<String>>[
-      ['ID', 'Distributor', 'Bill Number', 'Bill Date', 'Amount', 'Notes', 'Created At'],
+      ['ID', 'Distributor', 'Invoice No', 'Date', 'Amount', 'Notes', 'Created At'],
       for (final b in data)
         [
           b.id.toString(),
