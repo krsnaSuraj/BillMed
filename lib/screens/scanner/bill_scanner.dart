@@ -26,6 +26,7 @@ class BillScanner {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.camera, maxWidth: 2048);
     if (image == null) return null;
+    if (!context.mounted) return null;
     return _processImage(context, File(image.path));
   }
 
@@ -33,6 +34,7 @@ class BillScanner {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 2048);
     if (image == null) return null;
+    if (!context.mounted) return null;
     return _processImage(context, File(image.path));
   }
 

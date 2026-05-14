@@ -186,7 +186,7 @@ class _DistributorListScreenState extends ConsumerState<DistributorListScreen> {
               final bills = await db.getBillsByDistributor(d.id);
               for (final bill in bills) {
                 final payments = await db.getPaymentsByBill(bill.id);
-                for (final p in payments) await db.deletePayment(p.id);
+                for (final p in payments) { await db.deletePayment(p.id); }
                 await db.deleteBill(bill.id);
               }
               await db.deleteDistributor(d.id);

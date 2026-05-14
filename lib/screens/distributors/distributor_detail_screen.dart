@@ -65,7 +65,7 @@ class DistributorDetailScreen extends ConsumerWidget {
         children: [
           CircleAvatar(
             radius: 28,
-            backgroundColor: AppColors.primary.withOpacity(0.1),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
             child: Text(dist.name[0].toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
           ),
           const SizedBox(width: 16),
@@ -94,7 +94,7 @@ class DistributorDetailScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
+                Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
                 const SizedBox(height: 12),
                 const Text('No bills yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
                 const SizedBox(height: 12),
@@ -139,7 +139,7 @@ class DistributorDetailScreen extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppColors.info.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
               ),
               const SizedBox(width: 12),

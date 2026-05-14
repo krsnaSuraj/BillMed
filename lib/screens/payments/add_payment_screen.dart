@@ -80,7 +80,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<PaymentMode>(
-                value: _selectedMode,
+                initialValue: _selectedMode,
                 decoration: const InputDecoration(labelText: 'Payment Mode *', prefixIcon: Icon(Icons.payment)),
                 items: PaymentMode.values.map((m) {
                   IconData icon;

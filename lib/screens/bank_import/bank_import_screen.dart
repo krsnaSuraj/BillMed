@@ -134,7 +134,7 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
                     if (_filePath != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        '${_formatSize(File(_filePath!).lengthSync())}',
+                        _formatSize(File(_filePath!).lengthSync()),
                         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],

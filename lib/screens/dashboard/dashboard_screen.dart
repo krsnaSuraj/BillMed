@@ -257,7 +257,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: AppColors.primary.withOpacity(0.1),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                 child: Text(
                   d.distributor.name[0].toUpperCase(),
                   style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
@@ -299,7 +299,7 @@ class DashboardScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(60),
       child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined, size: 72, color: AppColors.textSecondary.withOpacity(0.3)),
+          Icon(Icons.inventory_2_outlined, size: 72, color: AppColors.textSecondary.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           const Text('No distributors yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
           const SizedBox(height: 16),

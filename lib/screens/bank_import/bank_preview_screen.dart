@@ -51,7 +51,7 @@ class BankPreviewScreen extends ConsumerWidget {
                       Icon(status == 'VERIFIED' ? Icons.verified : Icons.warning_amber,
                           color: balanceColor, size: 20),
                       const SizedBox(width: 8),
-                      Text('$status', style: TextStyle(fontWeight: FontWeight.bold, color: balanceColor)),
+                      Text(status, style: TextStyle(fontWeight: FontWeight.bold, color: balanceColor)),
                       const Spacer(),
                       Text('${transactions.length} transactions', style: const TextStyle(fontSize: 13)),
                     ],

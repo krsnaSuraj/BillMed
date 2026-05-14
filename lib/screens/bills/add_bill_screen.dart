@@ -74,8 +74,8 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (widget.distributorId == null) ...[
-                  DropdownButtonFormField<int>(
-                    value: _selectedDistributorId,
+                    DropdownButtonFormField<int>(
+                    initialValue: _selectedDistributorId,
                     decoration: const InputDecoration(labelText: 'Supplier *', prefixIcon: Icon(Icons.business)),
                     items: dists.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
                     onChanged: (v) => setState(() => _selectedDistributorId = v),

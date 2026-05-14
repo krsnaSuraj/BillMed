@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'gemini_service.dart';
 
 class ParsedTransaction {
@@ -132,19 +133,110 @@ class BankStatementService {
   static Future<String> _extractPdfText(File file) async {
     try {
       final bytes = await file.readAsBytes();
-      final str = String.fromCharCodes(bytes);
-      final buffer = StringBuffer();
-      final parenPattern = RegExp(r'\(([^)]*)\)');
-      for (final match in parenPattern.allMatches(str)) {
-        final text = match.group(1)!;
-        if (text.length > 2 && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
-          buffer.writeln(text.replaceAll(RegExp(r'\\[0-9]{3}'), '').trim());
-        }
-      }
-      return buffer.toString();
+      final fileStr = String.fromCharCodes(bytes);
+
+      // Method 1: Decompress FlateDecode streams and extract text
+      final textFromStreams = _extractFromStreams(bytes, fileStr);
+      if (textFromStreams.isNotEmpty) return textFromStreams;
+
+      // Method 2: Extract from raw content operators (uncompressed PDFs)
+      final operatorsText = _extractPdfOperators(fileStr);
+      if (operatorsText.isNotEmpty) return operatorsText;
+
+      // Method 3: Fallback to parenthesized text extraction
+      return _extractParenthesizedText(fileStr);
     } catch (_) {
       return '';
     }
+  }
+
+  static String _extractFromStreams(List<int> bytes, String fileStr) {
+    final result = StringBuffer();
+    int searchFrom = 0;
+
+    while (true) {
+      final streamStart = fileStr.indexOf('stream', searchFrom);
+      if (streamStart == -1) break;
+
+      // Check if preceding dict has FlateDecode
+      final dictEnd = streamStart;
+      final dictStart = fileStr.lastIndexOf('<<', dictEnd);
+      final dict = dictStart != -1 ? fileStr.substring(dictStart, dictEnd) : '';
+      final isFlate = dict.contains('FlateDecode');
+
+      // Find end of stream data
+      final dataStart = fileStr.indexOf('\n', streamStart);
+      if (dataStart == -1 || dataStart > streamStart + 20) { searchFrom = streamStart + 6; continue; }
+
+      final dataBegin = dataStart + 1;
+      final endstreamIdx = fileStr.indexOf('endstream', dataBegin);
+      if (endstreamIdx == -1) break;
+
+      final rawData = bytes.sublist(dataBegin, endstreamIdx);
+      searchFrom = endstreamIdx + 9;
+
+      String extracted;
+      if (isFlate) {
+        try {
+          final decoder = ZLibDecoder();
+          extracted = String.fromCharCodes(decoder.convert(rawData));
+        } catch (_) {
+          try {
+            int trim = rawData.length;
+            while (trim > 0 && (rawData[trim - 1] == 10 || rawData[trim - 1] == 13)) { trim--; }
+            final decoder = ZLibDecoder();
+            extracted = String.fromCharCodes(decoder.convert(rawData.sublist(0, trim)));
+          } catch (_) { continue; }
+        }
+      } else {
+        extracted = String.fromCharCodes(rawData);
+      }
+
+      result.writeln(_extractPdfOperators(extracted));
+    }
+
+    return result.toString().trim();
+  }
+
+  static String _extractPdfOperators(String content) {
+    final buffer = StringBuffer();
+
+    // TJ arrays: [(text) num (text) ...] TJ
+    for (final match in RegExp(r'\[(.*?)\]\s*TJ').allMatches(content)) {
+      for (final part in RegExp(r'\(([^)]*)\)').allMatches(match.group(1)!)) {
+        final text = part.group(1)!
+            .replaceAll('\\n', '\n').replaceAll('\\r', '\r')
+            .replaceAll('\\t', '\t').replaceAll('\\(', '(')
+            .replaceAll('\\)', ')').replaceAll('\\\\', '\\');
+        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+          buffer.write('${text.trim()} ');
+        }
+      }
+    }
+
+    // Tj operators: (text) Tj
+    for (final match in RegExp(r'\(([^)]*)\)\s*Tj').allMatches(content)) {
+      final text = match.group(1)!
+          .replaceAll('\\n', '\n').replaceAll('\\r', '\r')
+          .replaceAll('\\t', '\t').replaceAll('\\(', '(')
+          .replaceAll('\\)', ')').replaceAll('\\\\', '\\');
+      if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+        buffer.writeln(text.trim());
+      }
+    }
+
+    return buffer.toString().trim();
+  }
+
+  static String _extractParenthesizedText(String str) {
+    final buffer = StringBuffer();
+    for (final match in RegExp(r'\(([^)]*)\)').allMatches(str)) {
+      final text = match.group(1)!;
+      if (text.length > 2 && RegExp(r'[a-zA-Z0-9₹]').hasMatch(text)) {
+        buffer.writeln(text.replaceAll(RegExp(r'\\[0-9]{3}'), '').trim());
+      }
+    }
+    return buffer.toString();
   }
 
   static BankStatementResult _parseTransactions(String text) {
@@ -164,8 +256,8 @@ class BankStatementService {
         final v = _numbers(line).lastOrNull;
         if (v != null) { closingBal = v; foundClosing = true; }
       }
-      if (lower.contains('date') && (lower.contains('particular') || lower.contains('narration')) ||
-          line.startsWith('---') || line.startsWith('===')) continue;
+      if ((lower.contains('date') && (lower.contains('particular') || lower.contains('narration'))) ||
+          line.startsWith('---') || line.startsWith('===')) { continue; }
 
       final dateMatch = datePattern.firstMatch(line);
       if (dateMatch == null) continue;

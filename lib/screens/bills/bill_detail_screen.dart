@@ -112,7 +112,7 @@ class BillDetailScreen extends ConsumerWidget {
               Navigator.pop(ctx);
               final db = ref.read(databaseProvider);
               final payments = await db.getPaymentsByBill(billId);
-              for (final p in payments) await db.deletePayment(p.id);
+              for (final p in payments) { await db.deletePayment(p.id); }
               await db.deleteBill(billId);
               if (context.mounted) Navigator.pop(context, true);
             },
