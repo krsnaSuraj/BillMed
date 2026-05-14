@@ -148,6 +148,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.4.0 | CRITICAL: removed 'payment' from debit keywords — was matching UPI/CR 'Payment //' lines |
 | v2.3.9 | CRITICAL: Gemini error no longer blocks local parser + byte-level stream extraction fix |
 | v2.3.8 | CRITICAL: 'paid' keyword removed from debit detection - was marking UPI/CR as debit |
 | v2.3.7 | PDF extraction overhaul: BT/ET block parsing, ' quote op, better merging, zero analyzer issues |
