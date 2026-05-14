@@ -61,7 +61,7 @@ class _MainShellState extends ConsumerState<MainShell> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused) {
       _autoBackup();
     }
   }

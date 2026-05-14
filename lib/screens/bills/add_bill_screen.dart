@@ -9,7 +9,6 @@ class AddBillScreen extends ConsumerStatefulWidget {
   final String? prefillNumber;
   final double? prefillAmount;
   final DateTime? prefillDate;
-  final String? prefillDistributor;
   final Bill? bill;
 
   const AddBillScreen({
@@ -18,7 +17,6 @@ class AddBillScreen extends ConsumerStatefulWidget {
     this.prefillNumber,
     this.prefillAmount,
     this.prefillDate,
-    this.prefillDistributor,
     this.bill,
   });
 
@@ -43,7 +41,6 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
     _billDate = widget.prefillDate ?? DateTime.now();
     if (widget.prefillNumber != null) _billNoCtrl.text = widget.prefillNumber!;
     if (widget.prefillAmount != null) _amountCtrl.text = widget.prefillAmount!.toStringAsFixed(0);
-    if (widget.prefillDistributor != null) {}
 
     if (_isEditing) {
       _billNoCtrl.text = widget.bill!.billNumber;
@@ -140,12 +137,17 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final distributorId = _selectedDistributorId ?? widget.distributorId;
+    if (distributorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a supplier')));
+      return;
+    }
     setState(() => _saving = true);
     try {
       final db = ref.read(databaseProvider);
       if (_isEditing) {
         await db.updateBill(widget.bill!.copyWith(
-          distributorId: _selectedDistributorId ?? widget.distributorId!,
+          distributorId: distributorId,
           billNumber: _billNoCtrl.text.trim(),
           billDate: _billDate,
           amount: double.parse(_amountCtrl.text.trim()),
@@ -153,7 +155,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
         ));
       } else {
         await db.addBill(BillsCompanion(
-          distributorId: Value(_selectedDistributorId ?? widget.distributorId!),
+          distributorId: Value(distributorId),
           billNumber: Value(_billNoCtrl.text.trim()),
           billDate: Value(_billDate),
           amount: Value(double.parse(_amountCtrl.text.trim())),

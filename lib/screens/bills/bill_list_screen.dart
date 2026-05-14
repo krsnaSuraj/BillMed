@@ -85,7 +85,6 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
             prefillNumber: confirmed.billNumber,
             prefillAmount: confirmed.amount,
             prefillDate: confirmed.billDate,
-            prefillDistributor: confirmed.distributorName,
           ),
         ),
       );
