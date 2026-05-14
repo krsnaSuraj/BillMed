@@ -47,10 +47,24 @@ class BankStatementService {
         final bytes = await file.readAsBytes();
         final aiResult = await GeminiService.parsePdf(apiKey: geminiKey, pdfBytes: bytes);
         if (aiResult != null) {
+          // Check if it's an error message from Gemini
+          if (aiResult.startsWith('ERROR:')) {
+            return BankStatementResult(
+              status: 'FAILED',
+              message: aiResult.substring(6),
+              transactions: [],
+            );
+          }
           final parsed = _parseGeminiResponse(aiResult);
           if (parsed != null && parsed.transactions.isNotEmpty) return parsed;
         }
-      } catch (_) {}
+      } catch (e) {
+        return BankStatementResult(
+          status: 'FAILED',
+          message: 'AI error: ${e.toString().substring(0, e.toString().length.clamp(0, 100))}',
+          transactions: [],
+        );
+      }
     }
 
     // Fallback: regex parser on extracted text
@@ -65,8 +79,12 @@ class BankStatementService {
 
   static BankStatementResult? _parseGeminiResponse(String jsonText) {
     try {
-      final arrayMatch = RegExp(r'\[[\s\S]*?\]').firstMatch(jsonText);
-      final jsonStr = arrayMatch?.group(0) ?? jsonText;
+      // Extract JSON array - use greedy match to get full array
+      final start = jsonText.indexOf('[');
+      final end = jsonText.lastIndexOf(']');
+      if (start == -1 || end == -1 || end <= start) return null;
+      
+      final jsonStr = jsonText.substring(start, end + 1);
       final list = jsonDecode(jsonStr) as List;
       if (list.isEmpty) return null;
 

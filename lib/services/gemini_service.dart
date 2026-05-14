@@ -14,7 +14,7 @@ class GeminiService {
   static int _requestCount = 0;
 
   /// Call Gemini REST API directly with PDF bytes (base64 encoded).
-  /// This bypasses PDF text extraction — Gemini reads the PDF natively.
+  /// Returns JSON text on success, null on failure.
   static Future<String?> parsePdf({
     required String apiKey,
     required List<int> pdfBytes,
@@ -27,19 +27,26 @@ class GeminiService {
     }
 
     final base64 = base64Encode(pdfBytes);
-    const prompt = '''Extract ALL transactions from this PDF bank statement.
-Return ONLY a JSON array. No other text, no markdown.
+    final prompt = '''You are a bank statement parser.
 
-Each object must have:
-- date: "YYYY-MM-DD"
-- description: string
-- debit: number (0 if credit)
-- credit: number (0 if debit)
-- balance: number
+Here is a bank statement PDF. Extract ALL transactions from it and return ONLY a JSON array.
 
-Example: [{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]
+Each transaction object MUST have these exact fields:
+- "date": the date in YYYY-MM-DD format
+- "description": the transaction description or narration  
+- "debit": the debit amount as a number (0 if this is a credit)
+- "credit": the credit amount as a number (0 if this is a debit)
+- "balance": the running balance after this transaction as a number
 
-Parse EVERY transaction. Return ONLY JSON.''';
+Rules:
+1. Return ONLY the JSON array, nothing else
+2. Parse EVERY single transaction in the statement
+3. Convert dates to YYYY-MM-DD format
+4. Debit = money going out, Credit = money coming in
+5. If a description is empty, use "NA"
+
+Example output format:
+[{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]''';
 
     for (int attempt = 0; attempt < 3; attempt++) {
       for (int m = 0; m < _models.length; m++) {
@@ -75,13 +82,23 @@ Parse EVERY transaction. Return ONLY JSON.''';
             _modelIndex = idx;
 
             final data = jsonDecode(response.body);
+            
+            // Check for blocked content
+            if (data['promptFeedback']?['blockReason'] != null) {
+              return null;
+            }
+            
             final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
             if (text != null && text.toString().isNotEmpty) return text.toString();
+            return null;
           } else if (response.statusCode == 429) {
             _modelIndex = (_modelIndex + 1) % _models.length;
             await Future.delayed(const Duration(seconds: 3));
-          } else if (response.statusCode == 403) {
-            return null; // Invalid key
+          } else if (response.statusCode == 403 || response.statusCode == 400) {
+            // Key issue or bad request - don't retry
+            final body = jsonDecode(response.body);
+            final errMsg = body['error']?['message'] ?? 'Invalid API key or request';
+            return 'ERROR: $errMsg';
           } else {
             if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
           }
