@@ -148,6 +148,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.3.2 | Fix bank parser: integer amounts, credit detection, stricter balance checks |
 | v2.3.1 | Release build — all fixes included, CI/CD release fix |
 | v2.3.0+2 | Fixed 14 analyzer warnings, improved PDF parser (FlateDecode+zlib), BuildContext safety |
 | v2.3.0 | Gemini AI integration, bank transactions view, CA report PDF, backup fixes |
