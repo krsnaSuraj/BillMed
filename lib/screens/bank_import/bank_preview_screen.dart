@@ -262,9 +262,18 @@ class BankPreviewScreen extends ConsumerWidget {
 
     try {
       final db = ref.read(databaseProvider);
-      int saved = 0;
+      // Get existing transactions to detect duplicates
+      final existingKeys = await db.getExistingTransactionKeys();
+      final toInsert = <BankTransactionsCompanion>[];
+      int skipped = 0;
+
       for (final t in transactions) {
-        await db.addBankTransaction(BankTransactionsCompanion(
+        final key = '${t.txnDate.toIso8601String().substring(0, 10)}|${t.description}|${t.debit}|${t.credit}';
+        if (existingKeys.contains(key)) {
+          skipped++;
+          continue;
+        }
+        toInsert.add(BankTransactionsCompanion(
           txnDate: Value(t.txnDate),
           description: Value(t.description),
           debit: Value(t.debit),
@@ -272,13 +281,22 @@ class BankPreviewScreen extends ConsumerWidget {
           balance: Value(t.balance),
           sourceFile: Value(fileName),
         ));
-        saved++;
       }
+
+      int saved = 0;
+      if (toInsert.isNotEmpty) {
+        saved = await db.addBankTransactionsBatch(toInsert);
+      }
+
       if (context.mounted) {
         ref.invalidate(bankTxnsProvider);
+        final msg = saved > 0
+            ? '$saved transaction${saved > 1 ? 's' : ''} imported'
+            : 'No new transactions to import';
+        final detail = skipped > 0 ? ' ($skipped duplicates skipped)' : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('$saved transactions imported successfully'),
+              content: Text('$msg$detail'),
               backgroundColor: AppColors.success),
         );
         Navigator.pop(context, true);

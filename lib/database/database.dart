@@ -129,6 +129,23 @@ class BillMedDatabase extends _$BillMedDatabase {
     return 0;
   }
 
+  Future<int> addBankTransactionsBatch(List<BankTransactionsCompanion> entries) async {
+    if (entries.isEmpty) return 0;
+    await batch((b) {
+      for (final entry in entries) {
+        b.insert(bankTransactions, entry);
+      }
+    });
+    return entries.length;
+  }
+
+  Future<Set<String>> getExistingTransactionKeys() async {
+    final txns = await select(bankTransactions).get();
+    return txns.map((t) =>
+        '${t.txnDate.toIso8601String().substring(0, 10)}|${t.description}|${t.debit}|${t.credit}'
+    ).toSet();
+  }
+
   // All payments (for CA report cross-FY analysis)
   Future<List<Payment>> getAllPayments() => select(payments).get();
 }
