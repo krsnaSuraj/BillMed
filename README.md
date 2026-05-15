@@ -3,10 +3,10 @@
 > **A production-grade Flutter application for Indian medical shop owners** — manage suppliers, bills, payments, import bank statements, and generate CA-ready financial reports. Fully offline-first with optional AI enhancement.
 
 <p align="center">
-  <img src="screenshots/2.jpeg" width="200" alt="Dashboard"/>
-  <img src="screenshots/3.jpeg" width="200" alt="Bills"/>
-  <img src="screenshots/5.jpeg" width="200" alt="Bank Import"/>
-  <img src="screenshots/9.jpeg" width="200" alt="CA Report"/>
+  <img src="screenshots/dashboard.jpeg" width="200" alt="Dashboard"/>
+  <img src="screenshots/bills_list.jpeg" width="200" alt="Bills"/>
+  <img src="screenshots/bank_import.jpeg" width="200" alt="Bank Import"/>
+  <img src="screenshots/ca_export_dialog.jpeg" width="200" alt="CA Report"/>
 </p>
 
 ---
@@ -75,16 +75,16 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="screenshots/2.jpeg" width="180" alt="Dashboard"/>
-  <img src="screenshots/3.jpeg" width="180" alt="Bills List"/>
-  <img src="screenshots/5.jpeg" width="180" alt="Bank Import"/>
-  <img src="screenshots/6.jpeg" width="180" alt="Preview Transactions"/>
+  <img src="screenshots/dashboard.jpeg" width="180" alt="Dashboard"/>
+  <img src="screenshots/bills_list.jpeg" width="180" alt="Bills List"/>
+  <img src="screenshots/bank_import.jpeg" width="180" alt="Bank Import"/>
+  <img src="screenshots/preview_transactions.jpeg" width="180" alt="Preview Transactions"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/7.jpeg" width="180" alt="Supplier Detail"/>
-  <img src="screenshots/8.jpeg" width="180" alt="Reports"/>
-  <img src="screenshots/9.jpeg" width="180" alt="CA Report Dialog"/>
+  <img src="screenshots/supplier_detail.jpeg" width="180" alt="Supplier Detail"/>
+  <img src="screenshots/reports.jpeg" width="180" alt="Reports"/>
+  <img src="screenshots/ca_export_dialog.jpeg" width="180" alt="CA Report Dialog"/>
   <img src="screenshots/settings.jpeg" width="180" alt="Settings"/>
 </p>
 
