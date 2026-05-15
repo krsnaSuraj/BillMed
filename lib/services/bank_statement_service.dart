@@ -193,15 +193,16 @@ class BankStatementService {
     return _buildResult(txns, openingBal, closingBal, foundOpening, foundClosing, bank);
   }
 
-  // ── Canara Bank stream-based parser ─────────────────────────────────────────
+  // ── Universal bank parser (handles single-line & multi-line formats) ────────
   static BankStatementResult _parseCanaraStream(List<String> lines, String bank) {
     final txns = <ParsedTransaction>[];
     double openingBal = 0, closingBal = 0;
     bool foundOpen = false, foundClose = false;
-    final dtRe = RegExp(r'^(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}:\d{2}$');
+    final dtRe = RegExp(r'^(\d{2})[\/\-](\d{2})[\/\-](\d{4})');
     final amtRe = RegExp(r'^[\d,]+\.\d{2}$');
     final valueDateRe = RegExp(r'^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$');
 
+    // Detect opening/closing from any line
     for (final line in lines) {
       final l = line.toLowerCase();
       if (!foundOpen && (l.contains('opening balance') || l.contains('op bal'))) {
@@ -216,10 +217,45 @@ class BankStatementService {
 
     int i = 0;
     while (i < lines.length) {
-      final dtMatch = dtRe.firstMatch(lines[i].trim());
+      final raw = lines[i].trim();
+      final dtMatch = dtRe.firstMatch(raw);
       if (dtMatch == null) { i++; continue; }
 
       final date = DateTime(int.parse(dtMatch.group(3)!), int.parse(dtMatch.group(2)!), int.parse(dtMatch.group(1)!));
+      final afterDate = raw.substring(dtMatch.end).trim();
+      final amountsInLine = _amtsFromStr(afterDate);
+
+      // ── SINGLE-LINE MODE (date + description + amounts all on one line) ───
+      if (amountsInLine.length >= 2) {
+        String descPart = afterDate.replaceAll(RegExp(r'[\d,]+\.\d{2}'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+        final lowerDesc = descPart.toLowerCase();
+        final isDebitOneLine = lowerDesc.contains('neft dr') || lowerDesc.contains('neft debit') ||
+            lowerDesc.contains('/dr/') || lowerDesc.contains('chq') || lowerDesc.contains('transfer') ||
+            lowerDesc.contains('withdrawal') || lowerDesc.contains('debit') || lowerDesc.contains('ift') ||
+            lowerDesc.contains('imps') || lowerDesc.contains('sc ') || lowerDesc.contains('paid') ||
+            lowerDesc.contains('chrg') || lowerDesc.contains('sms');
+        final isCreditOneLine = !isDebitOneLine && (lowerDesc.contains('/cr/') || lowerDesc.contains('upi') ||
+            lowerDesc.contains('credit') || lowerDesc.contains('deposit') ||
+            lowerDesc.contains('interest') || lowerDesc.contains('refund') ||
+            lowerDesc.contains('by ') || lowerDesc.contains('cash'));
+
+        double db = 0, cr = 0, bal = 0;
+        if (amountsInLine.length >= 3) {
+          bal = amountsInLine.last;
+          if (isCreditOneLine) { cr = amountsInLine[amountsInLine.length - 2]; db = amountsInLine[amountsInLine.length - 3]; }
+          else { db = amountsInLine[amountsInLine.length - 2]; cr = amountsInLine[amountsInLine.length - 3]; }
+        } else if (amountsInLine.length == 2) {
+          bal = amountsInLine[1];
+          if (isCreditOneLine) { cr = amountsInLine[0]; } else { db = amountsInLine[0]; }
+        } else {
+          bal = amountsInLine[0];
+        }
+        txns.add(ParsedTransaction(txnDate: date, description: descPart.isEmpty ? 'Transaction' : descPart, debit: db, credit: cr, balance: bal));
+        i++;
+        continue;
+      }
+
+      // ── MULTI-LINE MODE (Canara format: date, desc, branch code, amounts on separate lines) ───
       i++;
 
       // Skip value date
@@ -252,7 +288,6 @@ class BankStatementService {
 
       final desc = descLines.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
       final lower = desc.toLowerCase();
-      // Debit keywords beat credit keywords
       final isDebitDesc = lower.contains('chq paid') || lower.contains('chq return') ||
           lower.contains('funds transfer debit') || lower.contains('neft dr') ||
           lower.contains('neft debit') || lower.contains('casa debit') ||
@@ -269,19 +304,18 @@ class BankStatementService {
           lower.contains('cash deposit') || lower.contains('by ') ||
           lower.contains('refun'));
 
-      double debit = 0, credit = 0, balance = 0;
+      double db = 0, cr = 0, bal = 0;
       if (amounts.length == 2) {
-        balance = amounts[1];
-        if (isCredit) { credit = amounts[0]; } else { debit = amounts[0]; }
+        bal = amounts[1];
+        if (isCredit) { cr = amounts[0]; } else { db = amounts[0]; }
       } else {
-        balance = amounts[0];
+        bal = amounts[0];
         if (txns.isNotEmpty) {
-          final delta = balance - txns.last.balance;
-          if (delta > 0) { credit = delta; } else { debit = -delta; }
+          final delta = bal - txns.last.balance;
+          if (delta > 0) { cr = delta; } else { db = -delta; }
         }
       }
-
-      txns.add(ParsedTransaction(txnDate: date, description: desc.isEmpty ? (isCredit ? 'Credit' : 'Debit') : desc, debit: debit, credit: credit, balance: balance));
+      txns.add(ParsedTransaction(txnDate: date, description: desc.isEmpty ? (isCredit ? 'Credit' : 'Debit') : desc, debit: db, credit: cr, balance: bal));
     }
 
     if (txns.isEmpty) return BankStatementResult(status: 'FAILED', message: 'No transactions found.', transactions: []);
