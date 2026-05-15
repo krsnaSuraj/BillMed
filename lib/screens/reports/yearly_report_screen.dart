@@ -408,7 +408,7 @@ class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
   Future<void> _export(BillMedDatabase db, String type) async {
     setState(() => _exporting = true);
     try {
-      if (type == 'pdf') await PdfExportService.generateCaReportPdf(db);
+      if (type == 'pdf') await PdfExportService.generateCaReportPdf(db, fyYear: _fyYear);
       else await ExportService.exportToCsv(db, type: 'bank');
     } finally {
       if (mounted) setState(() => _exporting = false);

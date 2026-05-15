@@ -154,6 +154,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BankViewScreen())),
             ),
           ]),
+          _section('Transfer to New Phone', [
+            ListTile(
+              leading: const Icon(Icons.phone_android, color: AppColors.success),
+              title: const Text('How to Move Data to New Phone'),
+              subtitle: const Text('Step-by-step guide'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showTransferGuide(),
+            ),
+            ListTile(
+              leading: Icon(Icons.backup_outlined, color: _backupLoading ? AppColors.textSecondary : AppColors.accent),
+              title: const Text('Step 1 — Backup Now'),
+              subtitle: const Text('Export your database and save it safely'),
+              trailing: _backupLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _backupLoading ? null : () => _manualBackup(),
+            ),
+          ]),
           _section('Backup & Export', [
             ListTile(
               leading: const Icon(Icons.backup, color: AppColors.accent),
@@ -285,6 +301,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showTransferGuide() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.phone_android, color: AppColors.success, size: 22),
+          SizedBox(width: 8),
+          Text('Move Data to New Phone'),
+        ]),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Follow these steps to safely transfer all your BillMed data:',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 14),
+              _step('1', 'Backup on OLD phone',
+                  'Settings → Manual Backup → share the .db file to yourself.', AppColors.accent),
+              _step('2', 'Save the backup file',
+                  'Send it to Google Drive, WhatsApp (yourself), Email, or USB.', AppColors.info),
+              _step('3', 'Install BillMed on NEW phone',
+                  'Download the same version of BillMed.', AppColors.success),
+              _step('4', 'Get the backup file',
+                  'Download the .db file from where you saved it.', AppColors.warning),
+              _step('5', 'Restore on NEW phone',
+                  'Settings → Restore from Backup → Select the .db file.', AppColors.danger),
+              _step('6', 'Restart the app',
+                  'Close and reopen BillMed. All data will be fully restored!', AppColors.success),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.tips_and_updates, color: AppColors.success, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'Tip: Take weekly backups to Google Drive — free and always accessible.',
+                    style: TextStyle(fontSize: 12, color: AppColors.success),
+                  )),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ElevatedButton(
+            onPressed: () { Navigator.pop(ctx); _manualBackup(); },
+            child: const Text('Backup Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _step(String num, String title, String desc, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        CircleAvatar(
+          radius: 12,
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Text(num, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(desc, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ])),
+      ]),
     );
   }
 }
