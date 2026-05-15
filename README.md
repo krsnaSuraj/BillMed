@@ -85,11 +85,11 @@
   <img src="screenshots/7.jpeg" width="180" alt="Supplier Detail"/>
   <img src="screenshots/8.jpeg" width="180" alt="Reports"/>
   <img src="screenshots/9.jpeg" width="180" alt="CA Report Dialog"/>
-  <img src="screenshots/WhatsApp Image 2026-05-16 at 3.55.05 AM.jpeg" width="180" alt="Settings"/>
+  <img src="screenshots/settings.jpeg" width="180" alt="Settings"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/WhatsApp Image 2026-05-16 at 3.55.06 AM.jpeg" width="180" alt="Add Bill"/>
+  <img src="screenshots/add_bill.jpeg" width="180" alt="Add Bill"/>
 </p>
 
 ---
