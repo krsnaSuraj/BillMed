@@ -5,6 +5,7 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/export_service.dart';
+import 'ca_export_dialog.dart';
 
 // Financial year runs Apr 1 → Mar 31 in India
 // FY 2024-25 means Apr 2024 – Mar 2025  → stored as year=2024
@@ -406,12 +407,26 @@ class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
   }
 
   Future<void> _export(BillMedDatabase db, String type) async {
-    setState(() => _exporting = true);
-    try {
-      if (type == 'pdf') await PdfExportService.generateCaReportPdf(db, fyYear: _fyYear);
-      else await ExportService.exportToCsv(db, type: 'bank');
-    } finally {
-      if (mounted) setState(() => _exporting = false);
+    if (type == 'pdf') {
+      // Show options dialog first
+      final cfg = await showDialog<CaReportConfig>(
+        context: context,
+        builder: (_) => CaExportDialog(fyYear: _fyYear),
+      );
+      if (cfg == null || !mounted) return; // user cancelled
+      setState(() => _exporting = true);
+      try {
+        await PdfExportService.generateCaReportPdf(db, fyYear: _fyYear, config: cfg);
+      } finally {
+        if (mounted) setState(() => _exporting = false);
+      }
+    } else {
+      setState(() => _exporting = true);
+      try {
+        await ExportService.exportToCsv(db, type: 'bank');
+      } finally {
+        if (mounted) setState(() => _exporting = false);
+      }
     }
   }
 }

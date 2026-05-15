@@ -1,19 +1,36 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../database/database.dart';
 import 'package:intl/intl.dart';
-
+import '../screens/reports/ca_export_dialog.dart';
 class PdfExportService {
-  // Use 'Rs.' instead of 'â‚¹' because the default PDF font doesn't support
-  // the Rupee symbol (U+20B9). Using latin fallback avoids garbled output.
+  // Font: NotoSans supports all Latin + ASCII clearly
+  static pw.Font? _regular;
+  static pw.Font? _bold;
+
+  static Future<void> _loadFonts() async {
+    _regular ??= await PdfGoogleFonts.notoSansRegular();
+    _bold    ??= await PdfGoogleFonts.notoSansBold();
+  }
+
+  static pw.ThemeData _theme() => pw.ThemeData.withFont(
+    base: _regular ?? pw.Font.helvetica(),
+    bold: _bold ?? pw.Font.helveticaBold(),
+    italic: pw.Font.helveticaOblique(),
+  );
+
+  /// Remove non-printable ASCII chars that garble PDF fonts.
+  static String _s(String t) =>
+      t.replaceAll(RegExp(r'[^\x20-\x7E]'), ' ').replaceAll(RegExp(r'  +'), ' ').trim();
+
   static String _money(double v) => 'Rs.${v.toStringAsFixed(2)}';
   static String _date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
   static String _dateShort(DateTime d) => DateFormat('dd/MM/yy').format(d);
-  static String _now() =>
-      DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+  static String _now() => DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
   // â”€â”€â”€ Bill PDF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -30,13 +47,8 @@ class PdfExportService {
     final paid = await db.getTotalPaidForBill(billId);
     final remaining = (bill.amount - paid).clamp(0.0, bill.amount);
 
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-        italic: pw.Font.helveticaOblique(),
-      ),
-    );
+    await _loadFonts();
+    final pdf = pw.Document(theme: _theme());
 
     pdf.addPage(
       pw.Page(
@@ -224,7 +236,9 @@ class PdfExportService {
 
   // â”€â”€â”€ CA Report PDF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  static Future<void> generateCaReportPdf(BillMedDatabase db, {int? fyYear}) async {
+  static Future<void> generateCaReportPdf(BillMedDatabase db, {int? fyYear, CaReportConfig? config}) async {
+    await _loadFonts();
+    final cfg = config ?? CaReportConfig();
     // FY: Apr 1 of fyYear â†’ Mar 31 of fyYear+1
     final now = DateTime.now();
     final fy = fyYear ?? (now.month >= 4 ? now.year : now.year - 1);
@@ -264,10 +278,12 @@ class PdfExportService {
       months[key]!['credit'] = (months[key]!['credit'] ?? 0) + t.credit;
     }
     final sortedMonths = months.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final pdf = pw.Document(theme: _theme());
 
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(base: pw.Font.helvetica(), bold: pw.Font.helveticaBold()),
-    );
+    // Business header info from user config
+    final bizName = cfg.businessName.isNotEmpty ? cfg.businessName : 'BillMed';
+    final ownerLine = cfg.ownerName.isNotEmpty ? 'Proprietor: ${cfg.ownerName}' : '';
+    final gstLine = cfg.gstin.isNotEmpty ? 'GSTIN: ${cfg.gstin}' : '';
 
     pdf.addPage(
       pw.MultiPage(
@@ -276,22 +292,21 @@ class PdfExportService {
         header: (ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                  pw.Text('BillMed â€” CA Report',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo800)),
-                  pw.Text('$fyLabel  |  ${DateFormat('dd MMM yyyy').format(fyStart)} â€“ ${DateFormat('dd MMM yyyy').format(DateTime(fy+1,3,31))}',
-                      style: const pw.TextStyle(fontSize: 10, color: PdfColors.indigo600)),
-                ]),
-                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                  pw.Text('Generated: ${_now()}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
-                  pw.Text('Confidential â€” For CA Use Only', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
-                ]),
-              ],
-            ),
-            pw.Divider(height: 12, color: PdfColors.indigo200),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text(bizName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo800)),
+                if (ownerLine.isNotEmpty) pw.Text(ownerLine, style: const pw.TextStyle(fontSize: 9, color: PdfColors.indigo600)),
+                if (gstLine.isNotEmpty) pw.Text(gstLine, style: const pw.TextStyle(fontSize: 9, color: PdfColors.indigo600)),
+                pw.SizedBox(height: 2),
+                pw.Text('CA Financial Report - $fyLabel', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo700)),
+                pw.Text('${DateFormat("dd MMM yyyy").format(fyStart)} to ${DateFormat("dd MMM yyyy").format(DateTime(fy+1,3,31))}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
+              ]),
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+                pw.Text('Generated: ${_now()}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+                pw.Text('Confidential - For CA Use Only', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+              ]),
+            ]),
+            pw.Divider(height: 10, color: PdfColors.indigo200),
           ],
         ),
         footer: (ctx) => pw.Row(
@@ -302,21 +317,21 @@ class PdfExportService {
           ],
         ),
         build: (ctx) => [
-          // â”€â”€ 1. Purchase / Payables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          _sectionHeader('1. Purchase & Payables Summary'),
-          _summaryBox(PdfColors.red50, PdfColors.red100, [
-            _amtRow('Total Purchases (Gross)', _money(totalPurchase), PdfColors.black),
-            _amtRow('Total Bills', '${allBills.length}', PdfColors.grey700),
-            _amtRow('Avg. Bill Value', allBills.isEmpty ? 'N/A' : _money(totalPurchase / allBills.length), PdfColors.grey700),
-            pw.Divider(height: 8, color: PdfColors.red200),
-            _amtRow('Total Paid to Suppliers', _money(totalPaid), PdfColors.green700),
-            _amtRow('Outstanding Payable', _money(outstanding.toDouble()), outstanding > 0 ? PdfColors.red700 : PdfColors.green700),
-            _amtRow('Payment Rate', totalPurchase > 0 ? '${(totalPaid/totalPurchase*100).toStringAsFixed(1)}%' : 'N/A', PdfColors.indigo700),
-          ]),
-          pw.SizedBox(height: 14),
+          if (cfg.inclPurchaseSummary) ...[
+            _sectionHeader('1. Purchase & Payables Summary'),
+            _summaryBox(PdfColors.red50, PdfColors.red100, [
+              _amtRow('Total Purchases (Gross)', _money(totalPurchase), PdfColors.black),
+              _amtRow('Total Bills', '${allBills.length}', PdfColors.grey700),
+              _amtRow('Avg. Bill Value', allBills.isEmpty ? 'N/A' : _money(totalPurchase / allBills.length), PdfColors.grey700),
+              pw.Divider(height: 8, color: PdfColors.red200),
+              _amtRow('Total Paid to Suppliers', _money(totalPaid), PdfColors.green700),
+              _amtRow('Outstanding Payable', _money(outstanding.toDouble()), outstanding > 0 ? PdfColors.red700 : PdfColors.green700),
+              _amtRow('Payment Rate', totalPurchase > 0 ? '${(totalPaid/totalPurchase*100).toStringAsFixed(1)}%' : 'N/A', PdfColors.indigo700),
+            ]),
+            pw.SizedBox(height: 14),
+          ],
 
-          // â”€â”€ 2. Bank / Cash Flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          _sectionHeader('2. Bank Account â€” Cash Flow Summary'),
+          if (cfg.inclBankCashFlow) _sectionHeader('2. Bank Account â€” Cash Flow Summary'),
           if (allTxns.isEmpty)
             pw.Text('No bank transactions for $fyLabel.', style: const pw.TextStyle(color: PdfColors.grey))
           else ...[
@@ -331,20 +346,20 @@ class PdfExportService {
             pw.SizedBox(height: 14),
           ],
 
-          // â”€â”€ 3. GST Estimate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          _sectionHeader('3. GST Input Tax Estimate (Approximate)'),
-          _summaryBox(PdfColors.orange50, PdfColors.orange100, [
-            _amtRow('Purchase Turnover', _money(totalPurchase), PdfColors.black),
-            _amtRow('Estimated Input GST @5%', _money(gstApprox), PdfColors.green700),
-            _amtRow('Net Purchase (Base Value)', _money(totalPurchase - gstApprox), PdfColors.indigo700),
-            pw.SizedBox(height: 4),
-            pw.Text('* GST slabs vary: 0%/5%/12%/18%. Verify with actual invoices.',
-                style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
-          ]),
-          pw.SizedBox(height: 14),
+          if (cfg.inclGstEstimate) ...[
+            _sectionHeader('3. GST Input Tax Estimate (Approximate)'),
+            _summaryBox(PdfColors.orange50, PdfColors.orange100, [
+              _amtRow('Purchase Turnover', _money(totalPurchase), PdfColors.black),
+              _amtRow('Estimated Input GST @5%', _money(gstApprox), PdfColors.green700),
+              _amtRow('Net Purchase (Base Value)', _money(totalPurchase - gstApprox), PdfColors.indigo700),
+              pw.SizedBox(height: 4),
+              pw.Text('* GST slabs vary: 0%/5%/12%/18%. Verify with actual invoices.',
+                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
+            ]),
+            pw.SizedBox(height: 14),
+          ],
 
-          // â”€â”€ 4. Monthly Bank Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          if (sortedMonths.isNotEmpty) ...[
+          if (cfg.inclMonthlyBreakdown && sortedMonths.isNotEmpty) ...[
             _sectionHeader('4. Monthly Bank Breakdown ($fyLabel)'),
             pw.TableHelper.fromTextArray(
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
@@ -362,8 +377,7 @@ class PdfExportService {
             pw.SizedBox(height: 14),
           ],
 
-          // â”€â”€ 5. Supplier-wise Purchase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          if (allBills.isNotEmpty) ...[
+          if (cfg.inclSupplierTable && allBills.isNotEmpty) ...[
             _sectionHeader('5. Supplier-wise Purchase ($fyLabel)'),
             pw.TableHelper.fromTextArray(
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.white),
@@ -386,9 +400,9 @@ class PdfExportService {
                 return [
                   _date(b.billDate),
                   '#${b.billNumber}',
-                  (distMap[b.distributorId]?.name ?? 'Unknown').length > 20
-                      ? '${(distMap[b.distributorId]?.name ?? 'Unknown').substring(0, 20)}...'
-                      : (distMap[b.distributorId]?.name ?? 'Unknown'),
+                  (_s(distMap[b.distributorId]?.name ?? 'Unknown')).length > 20
+                      ? '${_s(distMap[b.distributorId]?.name ?? 'Unknown').substring(0, 20)}...'
+                      : _s(distMap[b.distributorId]?.name ?? 'Unknown'),
                   _money(b.amount),
                   _money(paid),
                   due <= 0.01 ? 'PAID' : 'DUE',
@@ -398,8 +412,7 @@ class PdfExportService {
             pw.SizedBox(height: 14),
           ],
 
-          // â”€â”€ 6. Transaction Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          if (allTxns.isNotEmpty) ...[
+          if (cfg.inclTransactionDetails && allTxns.isNotEmpty) ...[
             _sectionHeader('6. Bank Transaction Details ($fyLabel)'),
             pw.TableHelper.fromTextArray(
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.white),
