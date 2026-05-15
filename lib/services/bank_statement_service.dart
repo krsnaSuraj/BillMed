@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'gemini_service.dart';
 
+// ─── Data Models ──────────────────────────────────────────────────────────────
+
 class ParsedTransaction {
   final DateTime txnDate;
   final String description;
@@ -35,9 +37,10 @@ class BankStatementResult {
   });
 }
 
-class BankStatementService {
-  // ─── Entry Point ─────────────────────────────────────────────────────────────
+// ─── Service ──────────────────────────────────────────────────────────────────
 
+class BankStatementService {
+  /// Primary entry point. Tries Gemini AI first, then built-in PDF parser.
   static Future<BankStatementResult> parseStatement({
     required String pdfPath,
     String? geminiKey,
@@ -48,7 +51,7 @@ class BankStatementService {
           status: 'FAILED', message: 'File not found', transactions: []);
     }
 
-    // Try Gemini AI first — it reads PDF natively
+    // ── 1. Gemini AI path ─────────────────────────────────────────────────────
     if (geminiKey != null && geminiKey.isNotEmpty) {
       try {
         final bytes = await file.readAsBytes();
@@ -61,7 +64,7 @@ class BankStatementService {
       } catch (_) {}
     }
 
-    // Fallback: built-in text extraction + regex parser
+    // ── 2. Built-in PDF text extraction + regex parser ────────────────────────
     final text = await _extractPdfText(file);
     if (text.isNotEmpty) {
       final result = _parseTransactions(text);
@@ -69,12 +72,17 @@ class BankStatementService {
     }
 
     return BankStatementResult(
-        status: 'FAILED',
-        message: 'Could not parse statement. Try manual entry.',
-        transactions: []);
+      status: 'FAILED',
+      message: 'Could not extract transactions from this PDF.\n\n'
+          'Tips:\n'
+          '• Use a Gemini API key (Settings) for best results\n'
+          '• Make sure the PDF is not a scanned image\n'
+          '• Try downloading the statement again from your bank',
+      transactions: [],
+    );
   }
 
-  // ─── Type-safe double conversion ─────────────────────────────────────────────
+  // ─── Type-safe numeric conversion ─────────────────────────────────────────
 
   static double _toDouble(dynamic v) {
     if (v == null) return 0.0;
@@ -85,11 +93,11 @@ class BankStatementService {
     return double.tryParse(s) ?? 0.0;
   }
 
-  // ─── Gemini Response Parser ───────────────────────────────────────────────────
+  // ─── Gemini JSON Response Parser ──────────────────────────────────────────
 
   static BankStatementResult? _parseGeminiResponse(String jsonText) {
     try {
-      // Strip markdown code fences if present
+      // Strip markdown code fences
       var cleaned = jsonText.trim();
       if (cleaned.startsWith('```')) {
         cleaned = cleaned
@@ -112,12 +120,12 @@ class BankStatementService {
         final debit = _toDouble(t['debit']);
         final credit = _toDouble(t['credit']);
         final balance = _toDouble(t['balance']);
-        if (debit == 0 && credit == 0 && balance == 0) continue; // skip junk rows
+        // Skip rows where everything is zero (header/footer rows Gemini included)
+        if (debit == 0 && credit == 0 && balance == 0) continue;
+        final desc = (t['description']?.toString() ?? '').trim();
         txns.add(ParsedTransaction(
           txnDate: _parseDate(t['date']?.toString() ?? ''),
-          description: (t['description']?.toString() ?? 'NA').trim().isEmpty
-              ? 'NA'
-              : t['description'].toString().trim(),
+          description: desc.isEmpty ? 'Transaction' : desc,
           debit: debit,
           credit: credit,
           balance: balance,
@@ -126,27 +134,23 @@ class BankStatementService {
 
       if (txns.isEmpty) return null;
 
-      final totalDebit = txns.fold<double>(0, (s, t) => s + t.debit);
-      final totalCredit = txns.fold<double>(0, (s, t) => s + t.credit);
-
-      // ── Verify balance math from AI data ──────────────────────────────────────
-      // Running-balance check: each row balance = prev balance + credit - debit
+      // Verify running balance from AI data
       int balanceErrors = 0;
       for (int i = 1; i < txns.length; i++) {
-        final expected =
-            txns[i - 1].balance + txns[i].credit - txns[i].debit;
-        if ((expected - txns[i].balance).abs() > 1.0) balanceErrors++;
+        final expected = txns[i - 1].balance + txns[i].credit - txns[i].debit;
+        if ((expected - txns[i].balance).abs() > 2.0) balanceErrors++;
       }
 
+      final totalDebit = txns.fold<double>(0, (s, t) => s + t.debit);
+      final totalCredit = txns.fold<double>(0, (s, t) => s + t.credit);
       final verified = balanceErrors == 0;
-      final pct = txns.isEmpty ? 0 : (balanceErrors / txns.length * 100).round();
 
       return BankStatementResult(
         transactions: txns,
         status: verified ? 'VERIFIED' : 'PARTIAL',
         message: verified
             ? '${txns.length} transactions parsed via AI — balance verified ✓'
-            : '${txns.length} transactions parsed via AI ($pct% balance errors)',
+            : '${txns.length} transactions via AI ($balanceErrors balance mismatches)',
         totalDebit: totalDebit,
         totalCredit: totalCredit,
       );
@@ -155,7 +159,7 @@ class BankStatementService {
     }
   }
 
-  // ─── Date Parser ─────────────────────────────────────────────────────────────
+  // ─── Date Parser ──────────────────────────────────────────────────────────
 
   static DateTime _parseDate(String str) {
     try {
@@ -168,8 +172,8 @@ class BankStatementService {
         if (d != null) return d;
       }
 
-      // DD/MM/YYYY  or  DD-MM-YYYY  or  DD Mon YYYY
-      final parts = s.split(RegExp(r'[\s\/\-]'));
+      // DD/MM/YYYY  DD-MM-YYYY  DD Mon YYYY
+      final parts = s.split(RegExp(r'[\s/\-]'));
       if (parts.length >= 3) {
         var day = int.tryParse(parts[0]);
         var month = int.tryParse(parts[1]) ?? _monthFromName(parts[1]);
@@ -186,6 +190,7 @@ class BankStatementService {
   }
 
   static int? _monthFromName(String s) {
+    if (s.length < 3) return null;
     const months = {
       'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
       'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
@@ -193,19 +198,25 @@ class BankStatementService {
     return months[s.toLowerCase().substring(0, 3)];
   }
 
-  // ─── PDF Text Extraction ──────────────────────────────────────────────────────
+  // ─── PDF Text Extraction ──────────────────────────────────────────────────
 
   static Future<String> _extractPdfText(File file) async {
     try {
       final bytes = await file.readAsBytes();
       final fileStr = String.fromCharCodes(bytes);
 
+      // Method 1: decompress FlateDecode streams (works for most modern PDFs)
       final fromStreams = _extractFromStreams(bytes, fileStr);
-      if (fromStreams.isNotEmpty) return fromStreams;
+      if (fromStreams.trim().isNotEmpty &&
+          RegExp(r'\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}').hasMatch(fromStreams)) {
+        return fromStreams;
+      }
 
+      // Method 2: raw PDF content operators (uncompressed / plain PDFs)
       final fromOps = _extractPdfOperators(fileStr);
-      if (fromOps.isNotEmpty) return fromOps;
+      if (fromOps.trim().isNotEmpty) return fromOps;
 
+      // Method 3: last-resort parenthesized string extraction
       return _extractParenthesizedText(fileStr);
     } catch (_) {
       return '';
@@ -221,11 +232,13 @@ class BankStatementService {
           _findBytes(bytes, [115, 116, 114, 101, 97, 109], searchFrom);
       if (streamStart == -1) break;
 
-      final dictEnd = streamStart;
-      final dictStr = fileStr.substring(
-          0, fileStr.length > dictEnd ? dictEnd : fileStr.length);
+      // Check dict for FlateDecode
+      final safeEnd =
+          fileStr.length > streamStart ? streamStart : fileStr.length;
+      final dictStr = fileStr.substring(0, safeEnd);
       final dictPos = dictStr.lastIndexOf('<<');
-      final dict = dictPos != -1 ? dictStr.substring(dictPos, dictEnd) : '';
+      final dict =
+          dictPos != -1 ? dictStr.substring(dictPos, safeEnd) : '';
       final isFlate = dict.contains('FlateDecode');
 
       int dataStart = streamStart + 6;
@@ -252,8 +265,8 @@ class BankStatementService {
       String extracted;
       if (isFlate) {
         try {
-          final decoder = ZLibDecoder();
-          extracted = String.fromCharCodes(decoder.convert(rawData));
+          extracted =
+              String.fromCharCodes(ZLibDecoder().convert(rawData));
         } catch (_) {
           continue;
         }
@@ -261,7 +274,8 @@ class BankStatementService {
         extracted = String.fromCharCodes(rawData);
       }
 
-      result.writeln(_extractPdfOperators(extracted));
+      final text = _extractPdfOperators(extracted);
+      if (text.isNotEmpty) result.writeln(text);
     }
 
     return result.toString().trim();
@@ -288,28 +302,28 @@ class BankStatementService {
     for (final block in btEt.allMatches(content)) {
       final blockText = block.group(1)!;
 
-      for (final match in RegExp(r'\[(.*?)\]\s*TJ').allMatches(blockText)) {
-        for (final part in RegExp(r'\(([^)]*)\)').allMatches(match.group(1)!)) {
+      // TJ array: [(text) num (text)] TJ
+      for (final m in RegExp(r'\[(.*?)\]\s*TJ').allMatches(blockText)) {
+        for (final part in RegExp(r'\(([^)]*)\)').allMatches(m.group(1)!)) {
           final text = _cleanPdfString(part.group(1)!);
-          if (text.trim().isNotEmpty &&
-              RegExp(r'[a-zA-Z0-9]').hasMatch(text)) {
+          if (text.trim().isNotEmpty && _hasMeaning(text)) {
             buffer.write('${text.trim()} ');
           }
         }
       }
 
-      for (final match
-          in RegExp(r'\(([^)]*)\)\s*Tj').allMatches(blockText)) {
-        final text = _cleanPdfString(match.group(1)!);
-        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9]').hasMatch(text)) {
+      // (text) Tj
+      for (final m in RegExp(r'\(([^)]*)\)\s*Tj').allMatches(blockText)) {
+        final text = _cleanPdfString(m.group(1)!);
+        if (text.trim().isNotEmpty && _hasMeaning(text)) {
           buffer.writeln(text.trim());
         }
       }
 
-      for (final match
-          in RegExp(r"\(([^)]*)\)\s*'").allMatches(blockText)) {
-        final text = _cleanPdfString(match.group(1)!);
-        if (text.trim().isNotEmpty && RegExp(r'[a-zA-Z0-9]').hasMatch(text)) {
+      // (text) '
+      for (final m in RegExp(r"\(([^)]*)\)\s*'").allMatches(blockText)) {
+        final text = _cleanPdfString(m.group(1)!);
+        if (text.trim().isNotEmpty && _hasMeaning(text)) {
           buffer.writeln(text.trim());
         }
       }
@@ -318,9 +332,9 @@ class BankStatementService {
     }
 
     if (buffer.toString().trim().isEmpty) {
-      for (final match in RegExp(r'\(([^)]*)\)').allMatches(content)) {
-        final text = _cleanPdfString(match.group(1)!);
-        if (text.length > 3 && RegExp(r'[a-zA-Z0-9]').hasMatch(text)) {
+      for (final m in RegExp(r'\(([^)]*)\)').allMatches(content)) {
+        final text = _cleanPdfString(m.group(1)!);
+        if (text.length > 3 && _hasMeaning(text)) {
           buffer.writeln(text.trim());
         }
       }
@@ -329,29 +343,30 @@ class BankStatementService {
     return buffer.toString().trim();
   }
 
-  static String _cleanPdfString(String s) {
-    return s
-        .replaceAll('\\n', '\n')
-        .replaceAll('\\r', '\r')
-        .replaceAll('\\t', '\t')
-        .replaceAll('\\(', '(')
-        .replaceAll('\\)', ')')
-        .replaceAll('\\\\', '\\')
-        .replaceAll(RegExp(r'\\[0-9]{3}'), '');
-  }
+  static bool _hasMeaning(String s) =>
+      RegExp(r'[a-zA-Z0-9]').hasMatch(s);
+
+  static String _cleanPdfString(String s) => s
+      .replaceAll('\\n', '\n')
+      .replaceAll('\\r', '\r')
+      .replaceAll('\\t', '\t')
+      .replaceAll('\\(', '(')
+      .replaceAll('\\)', ')')
+      .replaceAll('\\\\', '\\')
+      .replaceAll(RegExp(r'\\[0-9]{3}'), '');
 
   static String _extractParenthesizedText(String str) {
     final buffer = StringBuffer();
-    for (final match in RegExp(r'\(([^)]*)\)').allMatches(str)) {
-      final text = _cleanPdfString(match.group(1)!);
-      if (text.length > 2 && RegExp(r'[a-zA-Z0-9]').hasMatch(text)) {
+    for (final m in RegExp(r'\(([^)]*)\)').allMatches(str)) {
+      final text = _cleanPdfString(m.group(1)!);
+      if (text.length > 2 && _hasMeaning(text)) {
         buffer.writeln(text.trim());
       }
     }
     return buffer.toString();
   }
 
-  // ─── Main Transaction Parser ──────────────────────────────────────────────────
+  // ─── Main Transaction Parser ──────────────────────────────────────────────
 
   static BankStatementResult _parseTransactions(String text) {
     final rawLines =
@@ -359,9 +374,8 @@ class BankStatementService {
     final lines = _mergeLines(rawLines);
 
     final transactions = <ParsedTransaction>[];
-    // Match dates: DD/MM/YYYY  DD-MM-YYYY  DD/MM/YY  etc.
+    // Match DD/MM/YYYY, DD-MM-YYYY, DD/MM/YY etc at START of line
     final dateRe = RegExp(r'^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})');
-    // Amount pattern: numbers with optional commas and exactly 2 decimal places
     final amtRe = RegExp(r'(\d{1,3}(?:,\d{2,3})*\.\d{2})');
 
     double openingBal = 0, closingBal = 0;
@@ -370,29 +384,37 @@ class BankStatementService {
     for (final line in lines) {
       final lower = line.toLowerCase();
 
-      // ── Opening / Closing balance ───────────────────────────────────────────
-      if (lower.contains('opening balance') ||
-          lower.contains('op bal') ||
-          lower.contains('opening bal')) {
+      // Opening balance
+      if ((lower.contains('opening balance') ||
+              lower.contains('op bal') ||
+              lower.contains('opening bal') ||
+              lower.contains('b/f') ||
+              lower.contains('brought forward')) &&
+          !foundOpening) {
         final nums = _extractAmounts(line);
-        if (nums.isNotEmpty && !foundOpening) {
+        if (nums.isNotEmpty) {
           openingBal = nums.last;
           foundOpening = true;
         }
         continue;
       }
-      if (lower.contains('closing balance') ||
-          lower.contains('cl bal') ||
-          lower.contains('closing bal')) {
+
+      // Closing balance
+      if ((lower.contains('closing balance') ||
+              lower.contains('cl bal') ||
+              lower.contains('closing bal') ||
+              lower.contains('c/f') ||
+              lower.contains('carried forward')) &&
+          !foundClosing) {
         final nums = _extractAmounts(line);
-        if (nums.isNotEmpty && !foundClosing) {
+        if (nums.isNotEmpty) {
           closingBal = nums.last;
           foundClosing = true;
         }
         continue;
       }
 
-      // ── Transaction line ───────────────────────────────────────────────────
+      // Transaction line: must start with a date
       final dateMatch = dateRe.firstMatch(line);
       if (dateMatch == null) continue;
 
@@ -404,112 +426,66 @@ class BankStatementService {
         if (mon < 1 || mon > 12 || day < 1 || day > 31) continue;
         final date = DateTime(yr, mon, day);
 
-        // Remove the date part, then extract amounts from remainder
         final rest = line.substring(dateMatch.end);
         final amounts = _extractAmounts(rest);
         if (amounts.isEmpty) continue;
 
-        // Build description: strip amounts from rest
+        // Description = rest with all amounts stripped
         final desc = rest
             .replaceAll(amtRe, '')
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
 
-        // ── Assign debit / credit / balance ─────────────────────────────────
-        // Indian bank statements come in 3 main column layouts:
-        //  A) date | narration | debit | credit | balance   → 3 amounts max
-        //  B) date | narration | amount | Dr/Cr | balance   → 2 amounts
-        //  C) date | narration | amount | balance           → 2 amounts
         double debit = 0, credit = 0, balance = 0;
 
-        final hasDr = lower.contains(' dr ') ||
-            lower.contains('/dr/') ||
-            lower.contains(' dr\n') ||
-            lower.endsWith(' dr') ||
-            lower.contains('(dr)') ||
-            lower.contains('debit') ||
-            lower.contains('withdrawal') ||
-            lower.contains('atm-wd') ||
-            lower.contains('neft dr') ||
-            lower.contains('imps dr') ||
-            lower.contains('chq paid') ||
-            lower.contains('ecs dr') ||
-            lower.contains('si debit') ||
-            lower.contains('pos ') ||
-            lower.contains('mb_') ||
-            lower.contains('ib_');
-
-        final hasCr = !hasDr &&
-            (lower.contains(' cr ') ||
-                lower.contains('/cr/') ||
-                lower.contains(' cr\n') ||
-                lower.endsWith(' cr') ||
-                lower.contains('(cr)') ||
-                lower.contains('credit') ||
-                lower.contains('deposit') ||
-                lower.contains('interest') ||
-                lower.contains('refund') ||
-                lower.contains('neft cr') ||
-                lower.contains('imps cr') ||
-                lower.contains('ecs cr') ||
-                lower.contains('upi/cr') ||
-                lower.contains('by clg') ||
-                lower.contains('by tfr'));
+        // ── Keyword-based Dr/Cr detection ────────────────────────────────────
+        final hasDr = _isDebitLine(lower);
+        final hasCr = !hasDr && _isCreditLine(lower);
 
         if (amounts.length >= 3) {
-          // Layout A: last = balance, second-last = credit/debit amount,
-          // third-last may be the other column (often 0 or not printed).
-          // Most banks print only ONE non-zero amount per row in debit/credit cols.
+          // Format: ...debit_col | credit_col | balance
           balance = amounts.last;
-          final a1 = amounts[amounts.length - 3]; // potential debit col
-          final a2 = amounts[amounts.length - 2]; // potential credit col
+          final a1 = amounts[amounts.length - 3];
+          final a2 = amounts[amounts.length - 2];
 
           if (hasDr) {
-            // Debit column has the amount, credit col is blank/0
             debit = a1 > 0 ? a1 : a2;
             credit = 0;
           } else if (hasCr) {
             credit = a2 > 0 ? a2 : a1;
             debit = 0;
           } else {
-            // Use balance-delta heuristic: if we have a previous balance,
-            // determine direction from delta
+            // Use balance-delta heuristic
             if (transactions.isNotEmpty) {
-              final prevBal = transactions.last.balance;
-              final delta = balance - prevBal; // positive = credit, negative = debit
-              final txnAmt = a2 > 0 ? a2 : a1;
+              final delta = balance - transactions.last.balance;
+              final amt = a1 > 0 ? a1 : a2;
               if (delta < 0) {
-                debit = txnAmt;
+                debit = amt;
               } else {
-                credit = txnAmt;
+                credit = amt;
               }
             } else {
-              // No previous balance — use the larger of the two as the amount
-              final txnAmt = a1 > a2 ? a1 : a2;
-              debit = txnAmt; // conservative default
+              debit = a1 > 0 ? a1 : a2;
             }
           }
         } else if (amounts.length == 2) {
-          // Layout B/C: first = transaction amount, second = running balance
           balance = amounts[1];
-          final txnAmt = amounts[0];
+          final amt = amounts[0];
           if (hasCr) {
-            credit = txnAmt;
+            credit = amt;
           } else if (hasDr) {
-            debit = txnAmt;
+            debit = amt;
           } else if (transactions.isNotEmpty) {
-            // Balance delta tells us direction
             final delta = balance - transactions.last.balance;
             if (delta < 0) {
-              debit = txnAmt;
+              debit = amt;
             } else {
-              credit = txnAmt;
+              credit = amt;
             }
           } else {
-            debit = txnAmt;
+            debit = amt;
           }
         } else {
-          // Only one amount — treat as balance
           balance = amounts[0];
         }
 
@@ -528,23 +504,21 @@ class BankStatementService {
     if (transactions.isEmpty) {
       return BankStatementResult(
           status: 'FAILED',
-          message: 'No transactions found in PDF. Try manual entry.',
+          message: 'No transactions found. PDF may be scanned image — use Gemini AI.',
           transactions: []);
     }
 
-    // ── Verify balances ──────────────────────────────────────────────────────
+    // ── Balance verification ───────────────────────────────────────────────
     int runningErrors = 0;
     for (int i = 1; i < transactions.length; i++) {
       final expected = transactions[i - 1].balance +
           transactions[i].credit -
           transactions[i].debit;
-      if ((expected - transactions[i].balance).abs() > 1.0) runningErrors++;
+      if ((expected - transactions[i].balance).abs() > 2.0) runningErrors++;
     }
 
-    final totalDebit =
-        transactions.fold<double>(0, (s, t) => s + t.debit);
-    final totalCredit =
-        transactions.fold<double>(0, (s, t) => s + t.credit);
+    final totalDebit = transactions.fold<double>(0, (s, t) => s + t.debit);
+    final totalCredit = transactions.fold<double>(0, (s, t) => s + t.credit);
 
     String status;
     String message;
@@ -552,37 +526,34 @@ class BankStatementService {
     if (foundOpening && foundClosing) {
       final expectedClose = openingBal + totalCredit - totalDebit;
       final diff = (expectedClose - closingBal).abs();
+
       if (diff < 2.0 && runningErrors == 0) {
         status = 'VERIFIED';
-        message =
-            '${transactions.length} transactions — balance verified ✓';
-      } else if (diff < 2.0) {
+        message = '${transactions.length} transactions — balance verified ✓';
+      } else if (diff < 2.0 && runningErrors > 0) {
         status = 'PARTIAL';
-        message =
-            '${transactions.length} txns — opening/closing OK but $runningErrors running errors';
+        message = '${transactions.length} txns — opening/closing OK, $runningErrors row errors';
       } else {
-        // Show diagnostic: expected vs actual — helps user understand
         status = 'FAILED';
-        message =
-            'Balance mismatch: Expected closing ₹${expectedClose.toStringAsFixed(2)}, '
-            'PDF closing ₹${closingBal.toStringAsFixed(2)}. '
-            'Diff ₹${diff.toStringAsFixed(2)}. $runningErrors running errors. '
+        // Show helpful diagnostic
+        message = 'Balance mismatch detected.\n'
+            'Opening: Rs.${openingBal.toStringAsFixed(2)}\n'
+            'Expected closing: Rs.${expectedClose.toStringAsFixed(2)}\n'
+            'PDF closing: Rs.${closingBal.toStringAsFixed(2)}\n'
+            'Diff: Rs.${diff.toStringAsFixed(2)}\n'
             'You can still save and correct manually.';
       }
     } else if (runningErrors == 0 && transactions.length > 1) {
       status = 'VERIFIED';
-      message =
-          '${transactions.length} transactions — running balance OK ✓';
-    } else if (runningErrors < transactions.length * 0.3) {
+      message = '${transactions.length} transactions — running balance OK ✓';
+    } else if (runningErrors < (transactions.length * 0.3).ceil()) {
       status = 'PARTIAL';
       message =
-          '$runningErrors of ${transactions.length} balance mismatches. '
-          'Review before saving.';
+          '$runningErrors of ${transactions.length} balance mismatches. Review before saving.';
     } else {
       status = 'FAILED';
-      message =
-          'Could not verify balances ($runningErrors errors). '
-          'You can still save and correct manually.';
+      message = '${transactions.length} transactions found but balance could not be verified.\n'
+          'You can still save the data.';
     }
 
     return BankStatementResult(
@@ -594,12 +565,56 @@ class BankStatementService {
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  // ─── Keyword Detection ────────────────────────────────────────────────────
 
-  /// Extract monetary amounts (numbers with exactly 2 decimal places).
-  /// Strips dates first so date-numbers are not picked up.
+  static bool _isDebitLine(String lower) {
+    return lower.contains(' dr ') ||
+        lower.contains('/dr/') ||
+        lower.contains('(dr)') ||
+        lower.contains(' dr\n') ||
+        lower.endsWith(' dr') ||
+        lower.contains('debit') ||
+        lower.contains('withdrawal') ||
+        lower.contains('atm-wd') ||
+        lower.contains('atm/') ||
+        lower.contains('neft dr') ||
+        lower.contains('imps dr') ||
+        lower.contains('ecs dr') ||
+        lower.contains('chq paid') ||
+        lower.contains('si debit') ||
+        lower.contains('ach debit') ||
+        lower.contains('pos ') ||
+        lower.contains('mb_') ||
+        lower.contains('ib_') ||
+        lower.contains('upi/dr') ||
+        lower.contains('outward') ||
+        lower.contains('payment to');
+  }
+
+  static bool _isCreditLine(String lower) {
+    return lower.contains(' cr ') ||
+        lower.contains('/cr/') ||
+        lower.contains('(cr)') ||
+        lower.contains(' cr\n') ||
+        lower.endsWith(' cr') ||
+        lower.contains('credit') ||
+        lower.contains('deposit') ||
+        lower.contains('interest') ||
+        lower.contains('refund') ||
+        lower.contains('neft cr') ||
+        lower.contains('imps cr') ||
+        lower.contains('ecs cr') ||
+        lower.contains('upi/cr') ||
+        lower.contains('by clg') ||
+        lower.contains('by tfr') ||
+        lower.contains('inward') ||
+        lower.contains('received from');
+  }
+
+  // ─── Amount Extraction ────────────────────────────────────────────────────
+
   static List<double> _extractAmounts(String text) {
-    // Remove date patterns like 12/03/2025 or 12-03-25
+    // Remove dates so date-digits don't get parsed as amounts
     final noDate =
         text.replaceAll(RegExp(r'\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}'), '');
     return RegExp(r'(\d{1,3}(?:,\d{2,3})*\.\d{2})')
@@ -609,49 +624,56 @@ class BankStatementService {
         .toList();
   }
 
-  /// Merge multi-line transactions into single lines.
+  // ─── Line Merging ─────────────────────────────────────────────────────────
+
   static List<String> _mergeLines(List<String> lines) {
     final dateAtStart = RegExp(r'^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}');
     final hasAmount = RegExp(r'\d{1,3}(?:,\d{2,3})*\.\d{2}');
     final merged = <String>[];
     final buffer = StringBuffer();
     bool inTxn = false;
+    String? ocBuf; // opening/closing balance buffer
 
-    // Lines to skip entirely
     bool isJunk(String l) {
       final lw = l.toLowerCase();
       return lw.startsWith('page ') ||
           lw.startsWith('date ') ||
           lw.startsWith('txn date') ||
+          lw.startsWith('value date') ||
           lw.startsWith('narration') ||
           lw.startsWith('particulars') ||
           lw.startsWith('cheque') ||
           lw.startsWith('ref no') ||
-          lw.startsWith('value date') ||
+          lw.startsWith('ref number') ||
+          lw.startsWith('chq') && l.length < 8 ||
           lw.startsWith('----') ||
           lw.startsWith('====') ||
           lw.startsWith('disclaimer') ||
           lw.startsWith('end of statement') ||
+          lw.startsWith('end of report') ||
           lw.startsWith('unless the') ||
           lw.startsWith('generated on') ||
           lw.startsWith('statement period') ||
-          lw.startsWith('account') ||
+          lw.startsWith('branch') ||
+          lw.startsWith('ifsc') ||
+          lw.startsWith('micr') ||
           l.length < 3;
     }
-
-    // Accumulate opening/closing balance lines (may span 2 lines)
-    String? ocBuf;
 
     for (final line in lines) {
       if (isJunk(line)) continue;
       final lower = line.toLowerCase();
 
-      // Opening / closing balance accumulation
+      // Accumulate opening/closing balance lines (may span 2 lines)
       if (ocBuf != null ||
           lower.contains('opening') ||
           lower.contains('closing') ||
           lower.contains('op bal') ||
-          lower.contains('cl bal')) {
+          lower.contains('cl bal') ||
+          lower.contains('b/f') ||
+          lower.contains('c/f') ||
+          lower.contains('brought forward') ||
+          lower.contains('carried forward')) {
         ocBuf = ocBuf == null ? line : '$ocBuf $line'.trim();
         if (hasAmount.hasMatch(ocBuf)) {
           merged.add(ocBuf);
@@ -661,6 +683,7 @@ class BankStatementService {
       }
 
       if (dateAtStart.hasMatch(line)) {
+        // Save previous transaction
         if (inTxn && buffer.isNotEmpty) {
           merged.add(buffer.toString().trim());
           buffer.clear();
@@ -668,7 +691,7 @@ class BankStatementService {
         buffer.write(line);
         inTxn = true;
       } else if (inTxn) {
-        // Continuation line
+        // Continuation of current transaction (description on next line)
         buffer.write(' $line');
       }
     }
@@ -676,6 +699,7 @@ class BankStatementService {
     if (inTxn && buffer.isNotEmpty) {
       merged.add(buffer.toString().trim());
     }
+
     return merged;
   }
 }

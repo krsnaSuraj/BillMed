@@ -49,9 +49,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final db = ref.read(databaseProvider);
       final path = await BackupService.exportBackup(db);
-      if (mounted && path != null) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup exported successfully')),
+          SnackBar(
+            content: Text(path != null
+                ? 'Backup exported successfully'
+                : 'Backup failed: database file not found'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup error: $e')),
         );
       }
     } finally {
@@ -63,31 +73,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _exporting = true);
     try {
       final db = ref.read(databaseProvider);
-      final success = await BackupService.importBackup(db);
+      final result = await BackupService.importBackup(db);
+      if (!mounted) return;
+      if (result == RestoreResult.success) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Restore Complete'),
+            content: const Text(
+                'Backup restored successfully.\n\nPlease restart the app for changes to take effect.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context);
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else if (result == RestoreResult.invalid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Invalid backup file. Please select a valid BillMed .db file.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Restore cancelled')),
+        );
+      }
+    } catch (e) {
       if (mounted) {
-        if (success) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Restore Complete'),
-              content: const Text('Backup restored. Please restart the app for changes to take effect.'),
-              actions: [
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Restore cancelled')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore error: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _exporting = false);

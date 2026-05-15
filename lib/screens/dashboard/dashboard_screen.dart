@@ -128,15 +128,24 @@ class DashboardScreen extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 4),
-            Text(count, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
-            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            Text(count,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+            Builder(
+              builder: (ctx) => Text(
+                label,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
+              ),
+            ),
           ],
         ),
       ),
@@ -232,7 +241,13 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           Text('Distributors', style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
-          Text('Pending', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          Text('Pending',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.55))),
         ],
       ),
     );
@@ -257,10 +272,11 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
                 child: Text(
                   d.distributor.name[0].toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: AppColors.primaryLight),
                 ),
               ),
               const SizedBox(width: 12),
@@ -268,9 +284,22 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(d.distributor.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                    if (d.distributor.company != null && d.distributor.company!.isNotEmpty)
-                      Text(d.distributor.company!, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text(d.distributor.name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
+                    if (d.distributor.company != null &&
+                        d.distributor.company!.isNotEmpty)
+                      Builder(
+                        builder: (ctx) => Text(
+                          d.distributor.company!,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(ctx)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.55)),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -281,10 +310,22 @@ class DashboardScreen extends ConsumerWidget {
                     '₹${d.pendingAmount.toStringAsFixed(0)}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: d.pendingAmount > 0 ? AppColors.danger : AppColors.success,
+                      color: d.pendingAmount > 0
+                          ? AppColors.danger
+                          : AppColors.success,
                     ),
                   ),
-                  Text('${d.billCount} bills', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Builder(
+                    builder: (ctx) => Text(
+                      '${d.billCount} bills',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(ctx)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.55)),
+                    ),
+                  ),
                 ],
               ),
             ],
