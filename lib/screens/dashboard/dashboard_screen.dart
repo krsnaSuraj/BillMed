@@ -5,6 +5,7 @@ import '../../providers/database_provider.dart';
 import '../../theme/app_theme.dart';
 import '../distributors/distributor_detail_screen.dart';
 import '../distributors/add_distributor_screen.dart';
+import '../distributors/distributor_list_screen.dart';
 
 final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   final db = ref.watch(databaseProvider);
@@ -340,17 +341,31 @@ class DashboardScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(60),
       child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined, size: 72, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+          Icon(Icons.inventory_2_outlined, size: 72,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2)),
           const SizedBox(height: 16),
-          const Text('No distributors yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
-          const SizedBox(height: 16),
+          Text('No suppliers yet',
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+          const SizedBox(height: 8),
+          Text('Add your first medicine supplier to get started.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 20),
           ElevatedButton.icon(
             onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
+              await Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const AddDistributorScreen()));
+              // Invalidate ALL supplier-related providers so every tab refreshes
               ref.invalidate(dashboardProvider);
+              ref.invalidate(distributorListProvider);
+              ref.invalidate(distributorBalancesProvider);
             },
             icon: const Icon(Icons.add),
-            label: const Text('Add Distributor'),
+            label: const Text('Add Supplier'),
           ),
         ],
       ),

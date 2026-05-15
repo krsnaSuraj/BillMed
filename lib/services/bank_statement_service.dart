@@ -21,11 +21,7 @@ class BankStatementResult {
   BankStatementResult({required this.transactions, this.status = 'FAILED', this.message = '', this.totalDebit = 0, this.totalCredit = 0, this.bankName = ''});
 }
 
-// ── Column map detected from headers ──────────────────────────────────────────
-class _ColMap {
-  int date = 0, desc = 1, debit = -1, credit = -1, balance = -1, chq = -1, type = -1;
-  bool hasSeparateDebitCredit = false;
-}
+
 
 class BankStatementService {
   // ── Public entry point ─────────────────────────────────────────────────────
@@ -331,26 +327,7 @@ class BankStatementService {
     return BankStatementResult(transactions: txns, status: status, message: message, totalDebit: totalDebit, totalCredit: totalCredit, bankName: bank);
   }
 
-  // ── Column header detection ────────────────────────────────────────────────
-  static _ColMap _detectColumns(List<String> lines) {
-    final map = _ColMap();
-    for (final line in lines) {
-      final cols = line.toLowerCase().split(RegExp(r'\s{2,}')).where((c) => c.trim().isNotEmpty).toList();
-      if (cols.length < 3) continue;
-      bool hasDate = false, hasBalance = false;
-      for (int i = 0; i < cols.length; i++) {
-        final c = cols[i];
-        if (c.contains('date') && !c.contains('value')) { map.date = i; hasDate = true; }
-        if (c.contains('narration') || c.contains('particulars') || c.contains('description') || c.contains('details')) map.desc = i;
-        if (c.contains('withdrawal') || c.contains('debit') || c.contains('dr.')) { map.debit = i; map.hasSeparateDebitCredit = true; }
-        if (c.contains('deposit') || c.contains('credit') || c.contains('cr.')) { map.credit = i; map.hasSeparateDebitCredit = true; }
-        if (c.contains('balance') || c.contains('closing')) { map.balance = i; hasBalance = true; }
-        if (c.contains('chq') || c.contains('ref no') || c.contains('cheque')) map.chq = i;
-      }
-      if (hasDate && hasBalance) break;
-    }
-    return map;
-  }
+
 
   // ── Keyword helpers ────────────────────────────────────────────────────────
   static bool _hasDebitMarker(String l) =>

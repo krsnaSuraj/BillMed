@@ -6,6 +6,9 @@ import '../../theme/app_theme.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/export_service.dart';
 
+// Financial year runs Apr 1 → Mar 31 in India
+// FY 2024-25 means Apr 2024 – Mar 2025  → stored as year=2024
+
 class YearlyReportScreen extends ConsumerStatefulWidget {
   const YearlyReportScreen({super.key});
   @override
@@ -15,57 +18,71 @@ class YearlyReportScreen extends ConsumerStatefulWidget {
 class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
-  int _selectedYear = DateTime.now().year;
+  // Default: current FY (April of current year if month>=April, else last year)
+  late int _fyYear;
   bool _exporting = false;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    final now = DateTime.now();
+    _fyYear = now.month >= 4 ? now.year : now.year - 1;
   }
 
   @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _tabCtrl.dispose(); super.dispose(); }
+
+  /// FY start = Apr 1 of _fyYear; FY end = Mar 31 of (_fyYear+1)
+  DateTime get _fyStart => DateTime(_fyYear, 4, 1);
+  DateTime get _fyEnd   => DateTime(_fyYear + 1, 3, 31, 23, 59, 59);
+  String get _fyLabel   => 'FY ${_fyYear}-${(_fyYear + 1).toString().substring(2)}';
 
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CA Report'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('CA Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(_fyLabel, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          ],
+        ),
         actions: [
-          // Year selector
+          // FY year picker — only shows years with data + current + past 5
           PopupMenuButton<int>(
-            icon: const Icon(Icons.calendar_today, color: Colors.white),
-            tooltip: 'Select Year',
-            onSelected: (y) => setState(() => _selectedYear = y),
+            icon: const Icon(Icons.calendar_today),
+            tooltip: 'Select Financial Year',
+            onSelected: (y) => setState(() => _fyYear = y),
             itemBuilder: (_) {
-              final cur = DateTime.now().year;
-              return List.generate(5, (i) => cur - i)
-                  .map((y) => PopupMenuItem(
-                        value: y,
-                        child: Text('FY $y-${(y + 1) % 100}',
-                            style: TextStyle(
-                                fontWeight: y == _selectedYear ? FontWeight.bold : FontWeight.normal,
-                                color: y == _selectedYear ? AppColors.accent : null)),
-                      ))
-                  .toList();
+              final now = DateTime.now();
+              final curFy = now.month >= 4 ? now.year : now.year - 1;
+              // Show only past 5 FYs + current (no future)
+              return List.generate(6, (i) => curFy - i).map((y) {
+                final label = 'FY $y-${(y + 1).toString().substring(2)}';
+                return PopupMenuItem(
+                  value: y,
+                  child: Row(children: [
+                    Icon(_fyYear == y ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        size: 16, color: _fyYear == y ? AppColors.accent : Colors.grey),
+                    const SizedBox(width: 8),
+                    Text(label, style: TextStyle(fontWeight: _fyYear == y ? FontWeight.bold : FontWeight.normal)),
+                  ]),
+                );
+              }).toList();
             },
           ),
           _exporting
-              ? const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+              ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
               : PopupMenuButton<String>(
-                  icon: const Icon(Icons.download, color: Colors.white),
+                  icon: const Icon(Icons.download),
                   tooltip: 'Export',
                   onSelected: (v) => _export(db, v),
                   itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'pdf', child: ListTile(leading: Icon(Icons.picture_as_pdf, color: AppColors.danger), title: Text('Export PDF'))),
-                    PopupMenuItem(value: 'csv', child: ListTile(leading: Icon(Icons.table_chart, color: AppColors.success), title: Text('Export CSV'))),
+                    PopupMenuItem(value: 'pdf', child: ListTile(dense: true, leading: Icon(Icons.picture_as_pdf, color: AppColors.danger), title: Text('Export PDF Report'))),
+                    PopupMenuItem(value: 'csv', child: ListTile(dense: true, leading: Icon(Icons.table_chart, color: AppColors.success), title: Text('Export CSV (All Data)'))),
                   ],
                 ),
         ],
@@ -74,34 +91,49 @@ class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           indicatorColor: AppColors.accent,
-          tabs: const [
-            Tab(text: 'Summary'),
-            Tab(text: 'Bank Txns'),
-            Tab(text: 'Bills'),
-          ],
+          tabs: const [Tab(text: 'P&L Summary'), Tab(text: 'Bank Statement'), Tab(text: 'Purchases')],
         ),
       ),
       body: FutureBuilder(
-        future: Future.wait([db.getAllBills(), db.getAllBankTransactions(), db.getAllDistributors()]),
+        future: Future.wait([
+          db.getAllBills(),
+          db.getAllBankTransactions(),
+          db.getAllDistributors(),
+          db.getAllPayments(),
+        ]),
         builder: (ctx, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final allBills = snapshot.data![0] as List<Bill>;
-          final allTxns = snapshot.data![1] as List<BankTransaction>;
-          final allDists = snapshot.data![2] as List<Distributor>;
+          final allBills  = snapshot.data![0] as List<Bill>;
+          final allTxns   = snapshot.data![1] as List<BankTransaction>;
+          final allDists  = snapshot.data![2] as List<Distributor>;
+          final allPay    = snapshot.data![3] as List<Payment>;
 
-          // Filter by selected year
-          final fyStart = DateTime(_selectedYear, 4, 1); // April 1 = FY start
-          final fyEnd = DateTime(_selectedYear + 1, 3, 31, 23, 59, 59);
-          final bills = allBills.where((b) => b.billDate.isAfter(fyStart) && b.billDate.isBefore(fyEnd)).toList();
-          final txns = allTxns.where((t) => t.txnDate.isAfter(fyStart) && t.txnDate.isBefore(fyEnd)).toList()
+          // Filter to selected FY
+          final bills = allBills.where((b) => _inFY(b.billDate)).toList()
+            ..sort((a, b) => a.billDate.compareTo(b.billDate));
+          final txns = allTxns.where((t) => _inFY(t.txnDate)).toList()
             ..sort((a, b) => a.txnDate.compareTo(b.txnDate));
+          final pays = allPay.where((p) => _inFY(p.paymentDate)).toList();
+
+          if (bills.isEmpty && txns.isEmpty) {
+            return Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bar_chart_outlined, size: 64, color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.2)),
+                const SizedBox(height: 12),
+                Text('No data for $_fyLabel', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.5))),
+                const SizedBox(height: 8),
+                Text('Select a different Financial Year using the calendar icon above.', style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.4)), textAlign: TextAlign.center),
+              ],
+            ));
+          }
 
           return TabBarView(
             controller: _tabCtrl,
             children: [
-              _summaryTab(bills, txns, allDists),
-              _bankTxnsTab(txns),
-              _billsTab(bills, allDists),
+              _plTab(bills, txns, pays, allDists),
+              _bankTab(txns, ctx),
+              _purchasesTab(bills, pays, allDists, ctx),
             ],
           );
         },
@@ -109,267 +141,275 @@ class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
     );
   }
 
-  // ─── Tab 1: Summary ──────────────────────────────────────────────────────────
-  Widget _summaryTab(List<Bill> bills, List<BankTransaction> txns, List<Distributor> dists) {
-    final totalBilled = bills.fold<double>(0, (s, b) => s + b.amount);
-    final txnDebit = txns.fold<double>(0, (s, t) => s + t.debit);
-    final txnCredit = txns.fold<double>(0, (s, t) => s + t.credit);
-    final net = txnCredit - txnDebit;
+  bool _inFY(DateTime d) => !d.isBefore(_fyStart) && !d.isAfter(_fyEnd);
 
-    // Monthly bank breakdown
-    final months = <String, Map<String, double>>{};
-    for (final t in txns) {
-      final key = '${t.txnDate.year}-${t.txnDate.month.toString().padLeft(2, '0')}';
-      months.putIfAbsent(key, () => {'debit': 0.0, 'credit': 0.0, 'count': 0.0});
-      months[key]!['debit'] = (months[key]!['debit'] ?? 0) + t.debit;
-      months[key]!['credit'] = (months[key]!['credit'] ?? 0) + t.credit;
-      months[key]!['count'] = (months[key]!['count'] ?? 0) + 1;
+  // ─── TAB 1: P&L / Summary ─────────────────────────────────────────────────
+  Widget _plTab(List<Bill> bills, List<BankTransaction> txns, List<Payment> pays, List<Distributor> dists) {
+    final totalPurchase   = bills.fold<double>(0, (s, b) => s + b.amount);
+    final totalPaid       = pays.fold<double>(0, (s, p) => s + p.amount);
+    final outstanding     = totalPurchase - totalPaid;
+    final bankDebit       = txns.fold<double>(0, (s, t) => s + t.debit);
+    final bankCredit      = txns.fold<double>(0, (s, t) => s + t.credit);
+    final netCashFlow     = bankCredit - bankDebit;
+    final closingBal      = txns.isNotEmpty ? txns.last.balance : 0.0;
+
+    // GST estimate: medicines typically 5% / 12% / 18% GST
+    // We show approximate GST on purchases (5% slab — most medicines)
+    final gstApprox5      = totalPurchase / 1.05 * 0.05;
+
+    // Monthly purchase trend
+    final monthlyPurchase = <String, double>{};
+    for (final b in bills) {
+      final k = '${b.billDate.year}-${b.billDate.month.toString().padLeft(2,'0')}';
+      monthlyPurchase[k] = (monthlyPurchase[k] ?? 0) + b.amount;
     }
-    final sortedMonths = months.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final sortedMonths = monthlyPurchase.entries.toList()..sort((a,b)=>a.key.compareTo(b.key));
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       children: [
-        // FY label
+        // FY Header badge
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10)),
-          child: Text(
-            'Financial Year $_selectedYear-${(_selectedYear + 1) % 100}  (Apr $_selectedYear – Mar ${_selectedYear + 1})',
-            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.accent),
-            textAlign: TextAlign.center,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+          decoration: BoxDecoration(gradient: LinearGradient(colors: [AppColors.primary, AppColors.accent]), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_fyLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              Text('Apr $_fyYear – Mar ${_fyYear+1}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ],
           ),
         ),
         const SizedBox(height: 12),
 
-        // Bills Card
-        _sectionCard('Purchase / Bills', Icons.receipt_long, AppColors.info, [
+        // Purchase Summary
+        _section('Purchase / Payables', Icons.receipt_long, AppColors.danger, [
+          _kv('Total Purchases (Gross)', _rs(totalPurchase), AppColors.textPrimary),
           _kv('Total Bills', '${bills.length}', AppColors.info),
-          _kv('Total Purchase Amount', _rs(totalBilled), AppColors.textPrimary),
-          _kv('Avg per Bill', bills.isEmpty ? 'N/A' : _rs(totalBilled / bills.length), AppColors.textSecondary),
+          _kv('Avg. Bill Value', bills.isEmpty ? 'N/A' : _rs(totalPurchase / bills.length), AppColors.textSecondary),
+          const Divider(height: 12),
+          _kv('Total Paid to Suppliers', _rs(totalPaid), AppColors.success),
+          _kv('Outstanding Payable', _rs(outstanding < 0 ? 0 : outstanding), AppColors.danger),
+          _kv('Payment Rate', totalPurchase > 0 ? '${(totalPaid / totalPurchase * 100).toStringAsFixed(1)}%' : 'N/A', AppColors.info),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // Bank Card
-        _sectionCard('Bank Turnover', Icons.account_balance, AppColors.success, [
-          _kv('Total Transactions', '${txns.length}', AppColors.textPrimary),
-          _kv('Total Debits (Outflow)', _rs(txnDebit), AppColors.danger),
-          _kv('Total Credits (Inflow)', _rs(txnCredit), AppColors.success),
-          const Divider(height: 16),
-          _kv('Net (Inflow - Outflow)', _rs(net), net >= 0 ? AppColors.success : AppColors.danger),
-          _kv('Closing Balance', txns.isEmpty ? 'N/A' : _rs(txns.last.balance), AppColors.info),
+        // Bank / Cash Flow
+        _section('Bank Statement Summary', Icons.account_balance, AppColors.info, [
+          _kv('Total Credits (Money In)', _rs(bankCredit), AppColors.success),
+          _kv('Total Debits (Money Out)', _rs(bankDebit), AppColors.danger),
+          _kv('Net Cash Flow', _rs(netCashFlow), netCashFlow >= 0 ? AppColors.success : AppColors.danger),
+          _kv('Total Transactions', '${txns.length}', AppColors.info),
+          if (txns.isNotEmpty) _kv('Closing Balance', _rs(closingBal), AppColors.accent),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // Monthly breakdown
-        if (sortedMonths.isNotEmpty) ...[
-          _sectionCard('Monthly Breakdown', Icons.bar_chart, AppColors.accent, [
-            Row(children: [
-              const Expanded(flex: 2, child: Text('Month', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-              const Expanded(child: Text('Debit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.danger))),
-              const Expanded(child: Text('Credit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.success))),
-              const Expanded(child: Text('Net', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+        // GST Estimate
+        _section('GST Estimate (Approximate)', Icons.calculate, AppColors.accent, [
+          _kv('Purchase Turnover', _rs(totalPurchase), AppColors.textPrimary),
+          _kv('Approx. Input GST @5%', _rs(gstApprox5), AppColors.success),
+          _kv('Net of GST (Base Value)', _rs(totalPurchase - gstApprox5), AppColors.info),
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: const Text('⚠️ GST slab varies: 0% / 5% / 12% / 18%. Verify with your actual invoices. This is only an estimate.', style: TextStyle(fontSize: 11, color: AppColors.warning)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+
+        // Monthly Breakdown
+        if (sortedMonths.isNotEmpty)
+          _section('Monthly Purchase Trend', Icons.bar_chart, AppColors.success, [
+            Row(children: const [
+              Expanded(flex: 2, child: Text('Month', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+              Expanded(child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+              SizedBox(width: 60),
             ]),
-            const Divider(),
+            const Divider(height: 10),
             ...sortedMonths.map((e) {
-              final dr = e.value['debit'] ?? 0;
-              final cr = e.value['credit'] ?? 0;
-              final n = cr - dr;
+              final pct = totalPurchase > 0 ? (e.value / totalPurchase) : 0.0;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(children: [
                   Expanded(flex: 2, child: Text(_fmtMonthKey(e.key), style: const TextStyle(fontSize: 12))),
-                  Expanded(child: Text(_rs(dr), style: const TextStyle(fontSize: 11, color: AppColors.danger))),
-                  Expanded(child: Text(_rs(cr), style: const TextStyle(fontSize: 11, color: AppColors.success))),
-                  Expanded(child: Text(_rs(n), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: n >= 0 ? AppColors.success : AppColors.danger))),
+                  Expanded(child: Text(_rs(e.value), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                  SizedBox(
+                    width: 60,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: pct.clamp(0.0, 1.0),
+                        backgroundColor: AppColors.accent.withValues(alpha: 0.15),
+                        color: AppColors.accent,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
                 ]),
               );
             }),
           ]),
-        ],
       ],
     );
   }
 
-  // ─── Tab 2: Bank Transactions ─────────────────────────────────────────────────
-  Widget _bankTxnsTab(List<BankTransaction> txns) {
-    if (txns.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.account_balance_outlined, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2)),
-          const SizedBox(height: 12),
-          const Text('No bank transactions for this year'),
-        ]),
-      );
-    }
+  // ─── TAB 2: Bank Statement ─────────────────────────────────────────────────
+  Widget _bankTab(List<BankTransaction> txns, BuildContext ctx) {
+    if (txns.isEmpty) return _noData(ctx, 'No bank transactions for $_fyLabel');
+    final totalDr = txns.fold<double>(0, (s, t) => s + t.debit);
+    final totalCr = txns.fold<double>(0, (s, t) => s + t.credit);
+
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 16),
+      padding: const EdgeInsets.all(12),
       itemCount: txns.length + 1,
-      itemBuilder: (ctx, i) {
+      itemBuilder: (c, i) {
         if (i == 0) {
-          final dr = txns.fold<double>(0, (s, t) => s + t.debit);
-          final cr = txns.fold<double>(0, (s, t) => s + t.credit);
           return Card(
-            margin: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 8),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
-                _miniStat('Transactions', '${txns.length}', AppColors.info),
-                _miniStat('Total Debit', _rs(dr), AppColors.danger),
-                _miniStat('Total Credit', _rs(cr), AppColors.success),
+                _miniStat('Txns', '${txns.length}', AppColors.info),
+                _miniStat('Debit', _rs(totalDr), AppColors.danger),
+                _miniStat('Credit', _rs(totalCr), AppColors.success),
+                _miniStat('Net', _rs(totalCr - totalDr), (totalCr - totalDr) >= 0 ? AppColors.success : AppColors.danger),
               ]),
             ),
           );
         }
         final t = txns[i - 1];
-        final isCredit = t.credit > 0;
+        final isCr = t.credit > 0;
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: (isCredit ? AppColors.success : AppColors.danger).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(isCredit ? Icons.arrow_downward : Icons.arrow_upward,
-                    color: isCredit ? AppColors.success : AppColors.danger, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(t.description, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  Text('${t.txnDate.day}/${t.txnDate.month}/${t.txnDate.year}',
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-                ],
-              )),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(
-                  isCredit ? '+${_rs(t.credit)}' : '-${_rs(t.debit)}',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isCredit ? AppColors.success : AppColors.danger),
-                ),
-                Text('Bal: ${_rs(t.balance)}', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-              ]),
-            ]),
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          child: ListTile(
+            dense: true,
+            leading: CircleAvatar(
+              radius: 16,
+              backgroundColor: (isCr ? AppColors.success : AppColors.danger).withValues(alpha: 0.12),
+              child: Icon(isCr ? Icons.arrow_downward : Icons.arrow_upward, size: 14, color: isCr ? AppColors.success : AppColors.danger),
+            ),
+            title: Text(t.description, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${_fmtDate(t.txnDate)}  •  Bal: ${_rs(t.balance)}', style: const TextStyle(fontSize: 10)),
+            trailing: Text(
+              '${isCr ? '+' : '-'}${_rs(isCr ? t.credit : t.debit)}',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isCr ? AppColors.success : AppColors.danger),
+            ),
           ),
         );
       },
     );
   }
 
-  // ─── Tab 3: Bills ─────────────────────────────────────────────────────────────
-  Widget _billsTab(List<Bill> bills, List<Distributor> dists) {
-    if (bills.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.receipt_long_outlined, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2)),
-          const SizedBox(height: 12),
-          const Text('No bills for this year'),
-        ]),
-      );
-    }
+  // ─── TAB 3: Purchases / Bills ─────────────────────────────────────────────
+  Widget _purchasesTab(List<Bill> bills, List<Payment> pays, List<Distributor> dists, BuildContext ctx) {
+    if (bills.isEmpty) return _noData(ctx, 'No purchases for $_fyLabel');
     final distMap = {for (final d in dists) d.id: d};
+    // Paid per bill
+    final paidMap = <int, double>{};
+    for (final p in pays) { paidMap[p.billId] = (paidMap[p.billId] ?? 0) + p.amount; }
+
     final total = bills.fold<double>(0, (s, b) => s + b.amount);
+    final totalPaid = bills.fold<double>(0, (s, b) => s + (paidMap[b.id] ?? 0));
+
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 16),
+      padding: const EdgeInsets.all(12),
       itemCount: bills.length + 1,
-      itemBuilder: (ctx, i) {
+      itemBuilder: (c, i) {
         if (i == 0) {
           return Card(
-            margin: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 8),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
-                _miniStat('Total Bills', '${bills.length}', AppColors.info),
-                _miniStat('Total Amount', _rs(total), AppColors.danger),
-                _miniStat('Avg/Bill', _rs(total / bills.length), AppColors.accent),
+                _miniStat('Bills', '${bills.length}', AppColors.info),
+                _miniStat('Total', _rs(total), AppColors.danger),
+                _miniStat('Paid', _rs(totalPaid), AppColors.success),
+                _miniStat('Due', _rs(total - totalPaid), total - totalPaid > 0 ? AppColors.warning : AppColors.success),
               ]),
             ),
           );
         }
         final b = bills[i - 1];
-        final dist = distMap[b.distributorId];
+        final paid = paidMap[b.id] ?? 0;
+        final due = b.amount - paid;
+        final isPaid = due <= 0.01;
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(children: [
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('#${b.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  Text(dist?.name ?? 'Unknown Supplier',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
-                  Text('${b.billDate.day}/${b.billDate.month}/${b.billDate.year}',
-                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-                ],
-              )),
-              Text(_rs(b.amount), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.danger)),
-            ]),
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          child: ListTile(
+            dense: true,
+            leading: CircleAvatar(
+              radius: 16,
+              backgroundColor: (isPaid ? AppColors.success : AppColors.warning).withValues(alpha: 0.12),
+              child: Icon(isPaid ? Icons.check : Icons.hourglass_bottom, size: 14, color: isPaid ? AppColors.success : AppColors.warning),
+            ),
+            title: Text('#${b.billNumber}  •  ${distMap[b.distributorId]?.name ?? 'Unknown'}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            subtitle: Text('${_fmtDate(b.billDate)}  •  ${isPaid ? 'PAID' : 'Due: ${_rs(due)}'}', style: TextStyle(fontSize: 10, color: isPaid ? AppColors.success : AppColors.warning)),
+            trailing: Text(_rs(b.amount), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         );
       },
     );
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────────
-  String _rs(double v) => 'Rs.${v.toStringAsFixed(2)}';
-
-  String _fmtMonthKey(String key) {
-    const mns = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final parts = key.split('-');
-    if (parts.length < 2) return key;
-    final m = int.tryParse(parts[1]) ?? 0;
-    return '${mns[m]} ${parts[0]}';
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  Widget _noData(BuildContext ctx, String msg) {
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.inbox_outlined, size: 56, color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.2)),
+      const SizedBox(height: 12),
+      Text(msg, style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.4)), textAlign: TextAlign.center),
+    ]));
   }
 
-  Widget _sectionCard(String title, IconData icon, Color color, List<Widget> children) {
+  Widget _section(String title, IconData icon, Color color, List<Widget> children) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color)),
           ]),
-          const Divider(height: 16),
+          const Divider(height: 14),
           ...children,
         ]),
       ),
     );
   }
 
-  Widget _kv(String label, String value, Color color) {
+  Widget _kv(String k, String v, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [
-        Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65)))),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+        Expanded(child: Text(k, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65)))),
+        Text(v, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
       ]),
     );
   }
 
   Widget _miniStat(String label, String value, Color color) {
     return Expanded(child: Column(children: [
-      Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
-      Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+      Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: color), overflow: TextOverflow.ellipsis),
+      Text(label, style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
     ]));
+  }
+
+  String _rs(double v) => 'Rs.${v.toStringAsFixed(2)}';
+
+  String _fmtDate(DateTime d) => '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+
+  String _fmtMonthKey(String k) {
+    const m = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final p = k.split('-');
+    return '${m[int.tryParse(p[1]) ?? 0]} ${p[0]}';
   }
 
   Future<void> _export(BillMedDatabase db, String type) async {
     setState(() => _exporting = true);
     try {
-      if (type == 'pdf') {
-        await PdfExportService.generateCaReportPdf(db);
-      } else {
-        await ExportService.exportToCsv(db, type: 'bank');
-      }
+      if (type == 'pdf') await PdfExportService.generateCaReportPdf(db);
+      else await ExportService.exportToCsv(db, type: 'bank');
     } finally {
       if (mounted) setState(() => _exporting = false);
     }

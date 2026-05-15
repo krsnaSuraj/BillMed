@@ -16,34 +16,30 @@ class BackupService {
   /// Returns the backup file path on success, null on failure.
   static Future<String?> exportBackup(BillMedDatabase db) async {
     try {
-      // 1. Checkpoint WAL so all pending writes flush to main DB file
-      try {
-        await db.customStatement('PRAGMA wal_checkpoint(FULL)');
-      } catch (_) {}
+      // 1. Checkpoint WAL
+      try { await db.customStatement('PRAGMA wal_checkpoint(FULL)'); } catch (_) {}
 
-      // 2. Verify the DB file actually exists
+      // 2. Verify DB file exists
       final dbFile = await _getDbFile();
-      if (!await dbFile.exists()) {
-        return null; // explicitly return null = failure
-      }
+      if (!await dbFile.exists()) return null;
 
-      // 3. Copy to documents directory with timestamp name
+      // 3. Copy to documents dir with timestamp
       final dir = await getApplicationDocumentsDirectory();
       final ts = _timestamp();
       final backupFile = File(p.join(dir.path, 'BillMed_backup_$ts.db'));
       await dbFile.copy(backupFile.path);
 
-      // 4. Verify the copy actually worked
-      if (!await backupFile.exists() || await backupFile.length() < 100) {
-        return null;
-      }
+      // 4. Verify copy succeeded
+      if (!await backupFile.exists() || await backupFile.length() < 100) return null;
 
-      // 5. Share the file (user can save to Drive, WhatsApp, Files app etc.)
-      await Share.shareXFiles(
+      // 5. Offer to share (user may cancel — that's OK, file is already saved)
+      // We don't await Share result because cancel != failure
+      Share.shareXFiles(
         [XFile(backupFile.path)],
-        text: 'BillMed Backup - $ts\nStore this file safely to restore your data.',
+        text: 'BillMed Backup $ts\nSave this file securely to restore your data.',
       );
 
+      // Return path = success (file was written regardless of share outcome)
       return backupFile.path;
     } catch (e) {
       return null;

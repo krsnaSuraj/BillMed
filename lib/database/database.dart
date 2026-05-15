@@ -128,4 +128,7 @@ class BillMedDatabase extends _$BillMedDatabase {
     await delete(bankTransactions).go();
     return 0;
   }
+
+  // All payments (for CA report cross-FY analysis)
+  Future<List<Payment>> getAllPayments() => select(payments).get();
 }

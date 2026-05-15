@@ -123,9 +123,10 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Select a bank statement PDF to import transactions.\nSupports SBI, HDFC, ICICI, Axis, Canara and more.',
-            style: TextStyle(color: AppColors.textSecondary),
+          const SizedBox(height: 8),
+          Text(
+            'Supports Canara, SBI, HDFC, ICICI, PNB, Axis, Kotak, BOB and all major Indian banks.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
             textAlign: TextAlign.center,
           ),
           if (!hasGeminiKey) ...[
@@ -217,13 +218,54 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('How it works',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const Divider(),
-            _infoRow(Icons.auto_awesome, 'AI (Gemini) parses for best accuracy'),
-            _infoRow(Icons.security, 'Your data stays on your device'),
-            _infoRow(Icons.verified, 'Balance verified before you save'),
-            _infoRow(Icons.edit, 'Preview & correct before importing'),
+            Row(children: [
+              const Icon(Icons.help_outline, color: AppColors.accent, size: 20),
+              const SizedBox(width: 8),
+              const Text('How it works', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ]),
+            const Divider(height: 16),
+            _infoRow(Icons.picture_as_pdf, 'Download your bank statement PDF from NetBanking or bank app'),
+            _infoRow(Icons.upload_file, 'Tap "Select PDF" above and choose that file'),
+            _infoRow(Icons.auto_awesome, 'App auto-detects your bank and parses transactions'),
+            _infoRow(Icons.preview, 'Review the parsed transactions before saving'),
+            _infoRow(Icons.check_circle, 'Balance is verified — mismatches are flagged clearly'),
+            _infoRow(Icons.edit_note, 'You can edit/correct any transaction before saving'),
+            const Divider(height: 16),
+            const Text('Supported Banks', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6, runSpacing: 4,
+              children: [
+                for (final b in ['Canara', 'SBI', 'HDFC', 'ICICI', 'PNB', 'Axis', 'Kotak', 'BOB', 'Union', 'Yes', 'IndusInd', 'Federal', 'IDFC', '+ More'])
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(b, style: const TextStyle(fontSize: 11, color: AppColors.accent)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.tips_and_updates, color: AppColors.info, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'For best accuracy: Add a free Gemini API key in Settings. It uses Google AI to parse even complex PDF formats.',
+                    style: TextStyle(fontSize: 12, color: AppColors.info),
+                  )),
+                ],
+              ),
+            ),
           ],
         ),
       ),
