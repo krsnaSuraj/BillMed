@@ -230,14 +230,16 @@ class BankStatementService {
         String descPart = afterDate.replaceAll(RegExp(r'[\d,]+\.\d{2}'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
         final lowerDesc = descPart.toLowerCase();
         final isDebitOneLine = lowerDesc.contains('neft dr') || lowerDesc.contains('neft debit') ||
-            lowerDesc.contains('/dr/') || lowerDesc.contains('chq') || lowerDesc.contains('transfer') ||
+            lowerDesc.contains('/dr/') || lowerDesc.contains('-dr') ||
+            lowerDesc.contains('chq') || lowerDesc.contains('transfer') ||
             lowerDesc.contains('withdrawal') || lowerDesc.contains('debit') || lowerDesc.contains('ift') ||
-            lowerDesc.contains('imps') || lowerDesc.contains('sc ') || lowerDesc.contains('paid') ||
+            lowerDesc.contains('imps dr') || lowerDesc.contains('sc ') || lowerDesc.contains('paid') ||
             lowerDesc.contains('chrg') || lowerDesc.contains('sms');
-        final isCreditOneLine = !isDebitOneLine && (lowerDesc.contains('/cr/') || lowerDesc.contains('upi') ||
-            lowerDesc.contains('credit') || lowerDesc.contains('deposit') ||
+        final isCreditOneLine = !isDebitOneLine && (lowerDesc.contains('/cr/') || lowerDesc.contains('-cr') ||
+            lowerDesc.contains('upi') || lowerDesc.contains('credit') || lowerDesc.contains('deposit') ||
             lowerDesc.contains('interest') || lowerDesc.contains('refund') ||
-            lowerDesc.contains('by ') || lowerDesc.contains('cash'));
+            lowerDesc.contains('by ') || lowerDesc.contains('cash') ||
+            lowerDesc.contains('return'));
 
         double db = 0, cr = 0, bal = 0;
         if (amountsInLine.length >= 3) {
@@ -293,16 +295,17 @@ class BankStatementService {
           lower.contains('neft debit') || lower.contains('casa debit') ||
           lower.contains('stamp') || lower.contains('atm txn') || lower.contains('atm / imps') ||
           lower.contains('non judicial') || lower.contains('debit') ||
-          lower.contains('/dr/') || lower.contains('imps dr') || lower.contains('ib-') ||
+          lower.contains('/dr/') || lower.contains('-dr') ||
+          lower.contains('imps dr') || lower.contains('ib-') ||
           lower.contains('imps sc') || lower.contains('chq rtn') || lower.contains('inw chq') ||
           lower.contains('transaction charges');
       final hasInterest = lower.contains('interest');
-      final isCredit = !isDebitDesc && (branchCode == '33' || (cheque.length == 12) ||
-          lower.contains('upi/cr') || lower.contains('/cr/') ||
+      final isCredit = !isDebitDesc && (
+          lower.contains('upi/cr') || lower.contains('/cr/') || lower.contains('-cr') ||
           (hasInterest && !lower.contains('debit')) || lower.contains('deposit') ||
           lower.contains('inward') || lower.contains('neft cr') ||
           lower.contains('cash deposit') || lower.contains('by ') ||
-          lower.contains('refun'));
+          lower.contains('refun') || lower.contains('return'));
 
       double db = 0, cr = 0, bal = 0;
       if (amounts.length == 2) {
@@ -315,6 +318,21 @@ class BankStatementService {
           if (delta > 0) { cr = delta; } else { db = -delta; }
         }
       }
+
+      // Self-heal: if debit/credit amount matches previous balance exactly,
+      // the parser picked up the wrong field — recalculate from actual delta
+      if (txns.isNotEmpty) {
+        final prevBal = txns.last.balance;
+        if (db > 0 && (db - prevBal).abs() < 1) {
+          db = prevBal - bal;
+          if (db < 0) { cr = -db; db = 0; }
+        }
+        if (cr > 0 && (cr - prevBal).abs() < 1) {
+          cr = bal - prevBal;
+          if (cr < 0) { db = -cr; cr = 0; }
+        }
+      }
+
       txns.add(ParsedTransaction(txnDate: date, description: desc.isEmpty ? (isCredit ? 'Credit' : 'Debit') : desc, debit: db, credit: cr, balance: bal));
     }
 
