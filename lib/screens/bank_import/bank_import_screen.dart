@@ -47,35 +47,55 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
 
       if (!mounted) return;
 
-      if (result.status == 'FAILED' || result.transactions.isEmpty) {
-        final goManual = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Import Failed'),
-            content: Text(result.message.isNotEmpty ? result.message : 'Could not parse statement.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enter Manually')),
-            ],
+      // If we got ANY transactions, always go to preview screen
+      // (user can choose to save or not after seeing the data)
+      if (result.transactions.isNotEmpty) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BankPreviewScreen(
+              transactions: result.transactions,
+              fileName: _fileName ?? 'Unknown',
+              status: result.status,
+              message: result.message,
+            ),
           ),
         );
-        if (goManual == true && mounted) {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualEntryScreen()));
-        }
         return;
       }
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BankPreviewScreen(
-            transactions: result.transactions,
-            fileName: _fileName ?? 'Unknown',
-            status: result.status,
-            message: result.message,
+      // Truly zero transactions — offer manual entry
+      final goManual = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Could Not Parse PDF'),
+          content: Text(
+            result.message.isNotEmpty
+                ? result.message
+                : 'No transactions could be extracted from this PDF.\n\n'
+                    'Make sure:\n'
+                    '• The PDF is a bank statement (not a scanned image)\n'
+                    '• The PDF is not password-protected\n'
+                    '• Try with a Gemini API key for better accuracy',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enter Manually'),
+            ),
+          ],
         ),
       );
+      if (goManual == true && mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ManualEntryScreen()),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,6 +109,7 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasGeminiKey = ref.watch(geminiKeyProvider).isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('Import Bank Statement')),
       body: ListView(
@@ -107,8 +128,30 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
             style: TextStyle(color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 32),
-
+          if (!hasGeminiKey) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.warning, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Set a Gemini API key in Settings for much better parsing accuracy.',
+                      style: TextStyle(fontSize: 13, color: AppColors.warning),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
           Card(
             child: InkWell(
               onTap: _pickFile,
@@ -128,14 +171,17 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: _filePath != null ? AppColors.textPrimary : AppColors.textSecondary,
+                        color: _filePath != null
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
                       ),
                     ),
                     if (_filePath != null) ...[
                       const SizedBox(height: 4),
                       Text(
                         _formatSize(File(_filePath!).lengthSync()),
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
                   ],
@@ -149,12 +195,15 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
           ElevatedButton(
             onPressed: (_filePath != null && !_loading) ? _parse : null,
             child: _loading
-                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Text('Parse & Import'),
           ),
 
           const SizedBox(height: 16),
-
           _buildInfoSection(),
         ],
       ),
@@ -168,12 +217,13 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('How it works', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('How it works',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const Divider(),
-            _infoRow(Icons.cloud, 'Uses AI to parse transactions'),
-            _infoRow(Icons.security, 'Your data is kept private'),
-            _infoRow(Icons.verified, 'Balance verified before save'),
-            _infoRow(Icons.edit, 'Preview & edit before importing'),
+            _infoRow(Icons.auto_awesome, 'AI (Gemini) parses for best accuracy'),
+            _infoRow(Icons.security, 'Your data stays on your device'),
+            _infoRow(Icons.verified, 'Balance verified before you save'),
+            _infoRow(Icons.edit, 'Preview & correct before importing'),
           ],
         ),
       ),
@@ -187,7 +237,7 @@ class _BankImportScreenState extends ConsumerState<BankImportScreen> {
         children: [
           Icon(icon, size: 18, color: AppColors.accent),
           const SizedBox(width: 10),
-          Text(text, style: const TextStyle(fontSize: 14)),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
         ],
       ),
     );

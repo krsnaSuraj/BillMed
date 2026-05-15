@@ -26,26 +26,31 @@ class GeminiService {
     }
 
     final base64 = base64Encode(pdfBytes);
-    final prompt = '''You are a bank statement parser.
+    final prompt = '''You are a precise bank statement data extractor.
 
-Here is a bank statement PDF. Extract ALL transactions from it and return ONLY a JSON array.
+Extract ALL individual transactions from this bank statement PDF and return ONLY a valid JSON array. No explanation, no markdown, no code fences.
 
-Each transaction object MUST have these exact fields:
-- "date": the date in YYYY-MM-DD format
-- "description": the transaction description or narration  
-- "debit": the debit amount as a number (0 if this is a credit)
-- "credit": the credit amount as a number (0 if this is a debit)
-- "balance": the running balance after this transaction as a number
+Each transaction object MUST have EXACTLY these fields with correct types:
+{
+  "date": "YYYY-MM-DD",          // transaction date as string
+  "description": "string",        // narration/description text
+  "debit": 0.00,                  // amount debited as NUMBER (0 if credit transaction)
+  "credit": 0.00,                 // amount credited as NUMBER (0 if debit transaction)
+  "balance": 0.00                 // running balance AFTER this transaction as NUMBER
+}
 
-Rules:
-1. Return ONLY the JSON array, nothing else
-2. Parse EVERY single transaction in the statement
-3. Convert dates to YYYY-MM-DD format
-4. Debit = money going out, Credit = money coming in
-5. If a description is empty, use "NA"
+CRITICAL RULES:
+1. Return ONLY the JSON array — no other text whatsoever
+2. "debit", "credit", "balance" MUST be numbers, NOT strings (no quotes around them)
+3. Do NOT include opening balance or closing balance rows — only actual transactions
+4. For debit transactions: debit > 0, credit = 0
+5. For credit transactions: credit > 0, debit = 0
+6. "balance" is the running account balance AFTER the transaction
+7. Include EVERY transaction — do not skip any
+8. Remove commas from numbers (e.g. 1,234.56 → 1234.56)
 
-Example output format:
-[{"date":"2026-01-15","description":"NEFT TRANSFER","debit":5000,"credit":0,"balance":45000}]''';
+Example of correct output:
+[{"date":"2025-01-10","description":"NEFT FROM XYZ","debit":0,"credit":5000.00,"balance":25000.00},{"date":"2025-01-11","description":"ATM WITHDRAWAL","debit":2000.00,"credit":0,"balance":23000.00}]''';
 
     for (int attempt = 0; attempt < 3; attempt++) {
       for (int m = 0; m < _models.length; m++) {
