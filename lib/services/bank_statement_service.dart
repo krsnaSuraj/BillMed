@@ -251,11 +251,23 @@ class BankStatementService {
       if (amounts.isEmpty) continue;
 
       final desc = descLines.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-      // branchCode==33 or long cheque number = credit; branchCode==4569 = debit
-      final isCredit = branchCode == '33' || (cheque.length == 12) ||
-          desc.toLowerCase().contains('upi/cr') || desc.toLowerCase().contains('/cr/') ||
-          desc.toLowerCase().contains('interest') || desc.toLowerCase().contains('deposit') ||
-          desc.toLowerCase().contains('credit') || desc.toLowerCase().contains('inward');
+      final lower = desc.toLowerCase();
+      // Debit keywords beat credit keywords
+      final isDebitDesc = lower.contains('chq paid') || lower.contains('chq return') ||
+          lower.contains('funds transfer debit') || lower.contains('neft dr') ||
+          lower.contains('neft debit') || lower.contains('casa debit') ||
+          lower.contains('stamp') || lower.contains('atm txn') || lower.contains('atm / imps') ||
+          lower.contains('non judicial') || lower.contains('debit') ||
+          lower.contains('/dr/') || lower.contains('imps dr') || lower.contains('ib-') ||
+          lower.contains('imps sc') || lower.contains('chq rtn') || lower.contains('inw chq') ||
+          lower.contains('transaction charges');
+      final hasInterest = lower.contains('interest');
+      final isCredit = !isDebitDesc && (branchCode == '33' || (cheque.length == 12) ||
+          lower.contains('upi/cr') || lower.contains('/cr/') ||
+          (hasInterest && !lower.contains('debit')) || lower.contains('deposit') ||
+          lower.contains('inward') || lower.contains('neft cr') ||
+          lower.contains('cash deposit') || lower.contains('by ') ||
+          lower.contains('refun'));
 
       double debit = 0, credit = 0, balance = 0;
       if (amounts.length == 2) {
