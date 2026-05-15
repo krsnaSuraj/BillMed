@@ -21,7 +21,9 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _version = '';
-  bool _exporting = false;
+  bool _backupLoading = false;
+  bool _exportLoading = false;
+  String _exportingType = '';
 
   @override
   void initState() {
@@ -35,42 +37,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _export(String type) async {
-    setState(() => _exporting = true);
+    setState(() { _exportLoading = true; _exportingType = type; });
     try {
       final db = ref.read(databaseProvider);
       await ExportService.exportToCsv(db, type: type);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export error: $e')));
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) setState(() { _exportLoading = false; _exportingType = ''; });
     }
   }
 
   Future<void> _manualBackup() async {
-    setState(() => _exporting = true);
+    setState(() => _backupLoading = true);
     try {
       final db = ref.read(databaseProvider);
       final path = await BackupService.exportBackup(db);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(path != null
-                ? 'Backup exported successfully'
-                : 'Backup failed: database file not found'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(path != null ? 'Backup exported! Share it to save securely.' : 'Backup failed — database file not found.'),
+        ));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup error: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backup error: $e')));
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) setState(() => _backupLoading = false);
     }
   }
 
   Future<void> _restoreBackup() async {
-    setState(() => _exporting = true);
+    setState(() => _backupLoading = true);
     try {
       final db = ref.read(databaseProvider);
       final result = await BackupService.importBackup(db);
@@ -81,39 +77,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
             title: const Text('Restore Complete'),
-            content: const Text(
-                'Backup restored successfully.\n\nPlease restart the app for changes to take effect.'),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.pop(context);
-                },
-                child: const Text('OK'),
-              ),
-            ],
+            content: const Text('Backup restored.\n\nPlease restart the app for changes to take effect.'),
+            actions: [ElevatedButton(onPressed: () { Navigator.pop(ctx); Navigator.pop(context); }, child: const Text('OK'))],
           ),
         );
       } else if (result == RestoreResult.invalid) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Invalid backup file. Please select a valid BillMed .db file.'),
-          ),
-        );
+            const SnackBar(content: Text('Invalid file. Please select a valid BillMed .db backup file.')));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Restore cancelled')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restore cancelled')));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore error: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restore error: $e')));
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) setState(() => _backupLoading = false);
     }
   }
 
@@ -184,53 +161,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: const Text('Android Auto Backup (Google Drive)'),
             ),
             ListTile(
-              leading: Icon(Icons.backup_outlined, color: _exporting ? AppColors.textSecondary : AppColors.accent),
+              leading: Icon(Icons.backup_outlined, color: _backupLoading ? AppColors.textSecondary : AppColors.accent),
               title: const Text('Manual Backup'),
-              subtitle: const Text('Export database file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _manualBackup(),
+              subtitle: const Text('Export database file (share to Drive, Files, etc.)'),
+              trailing: _backupLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _backupLoading ? null : () => _manualBackup(),
             ),
             ListTile(
-              leading: Icon(Icons.restore, color: _exporting ? AppColors.textSecondary : AppColors.warning),
+              leading: Icon(Icons.restore, color: _backupLoading ? AppColors.textSecondary : AppColors.warning),
               title: const Text('Restore from Backup'),
-              subtitle: const Text('Import .db file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _restoreBackup(),
+              subtitle: const Text('Import .db file to restore data'),
+              trailing: _backupLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _backupLoading ? null : () => _restoreBackup(),
             ),
             ListTile(
-              leading: Icon(Icons.file_download, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              leading: Icon(Icons.file_download, color: _exportLoading && _exportingType == 'distributors' ? AppColors.textSecondary : AppColors.info),
               title: const Text('Export Distributors'),
               subtitle: const Text('CSV file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _export('distributors'),
+              trailing: _exportLoading && _exportingType == 'distributors' ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exportLoading ? null : () => _export('distributors'),
             ),
             ListTile(
-              leading: Icon(Icons.receipt_long, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              leading: Icon(Icons.receipt_long, color: _exportLoading && _exportingType == 'bills' ? AppColors.textSecondary : AppColors.info),
               title: const Text('Export Bills'),
               subtitle: const Text('CSV file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _export('bills'),
+              trailing: _exportLoading && _exportingType == 'bills' ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exportLoading ? null : () => _export('bills'),
             ),
             ListTile(
-              leading: Icon(Icons.payment, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              leading: Icon(Icons.payment, color: _exportLoading && _exportingType == 'payments' ? AppColors.textSecondary : AppColors.info),
               title: const Text('Export Payments'),
               subtitle: const Text('CSV file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _export('payments'),
+              trailing: _exportLoading && _exportingType == 'payments' ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exportLoading ? null : () => _export('payments'),
             ),
             ListTile(
-              leading: Icon(Icons.account_balance, color: _exporting ? AppColors.textSecondary : AppColors.info),
+              leading: Icon(Icons.account_balance, color: _exportLoading && _exportingType == 'bank' ? AppColors.textSecondary : AppColors.info),
               title: const Text('Export Bank Transactions'),
               subtitle: const Text('CSV file'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _export('bank'),
+              trailing: _exportLoading && _exportingType == 'bank' ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exportLoading ? null : () => _export('bank'),
             ),
             ListTile(
-              leading: Icon(Icons.file_download_done, color: _exporting ? AppColors.textSecondary : AppColors.success),
+              leading: Icon(Icons.file_download_done, color: _exportLoading && _exportingType == 'all' ? AppColors.textSecondary : AppColors.success),
               title: const Text('Export All Data'),
               subtitle: const Text('Distributors + Bills + Payments'),
-              trailing: _exporting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
-              onTap: _exporting ? null : () => _export('all'),
+              trailing: _exportLoading && _exportingType == 'all' ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.chevron_right),
+              onTap: _exportLoading ? null : () => _export('all'),
             ),
           ]),
           _section('AI Settings', [

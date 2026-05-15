@@ -6,61 +6,71 @@ import 'package:file_picker/file_picker.dart';
 import '../database/database.dart';
 
 class BackupService {
-  // ─── Get DB file path (same path used by Drift) ───────────────────────────
+  // ─── Get DB file path (must match the path used by Drift in database.dart) ──
   static Future<File> _getDbFile() async {
     final dir = await getApplicationDocumentsDirectory();
     return File(p.join(dir.path, 'billmed.db'));
   }
 
-  // ─── Manual Backup ─────────────────────────────────────────────────────────
+  // ─── Manual Backup ──────────────────────────────────────────────────────────
+  /// Returns the backup file path on success, null on failure.
   static Future<String?> exportBackup(BillMedDatabase db) async {
     try {
-      // Checkpoint WAL to make sure all writes are flushed to the main DB file
-      await db.customStatement('PRAGMA wal_checkpoint(FULL)');
+      // 1. Checkpoint WAL so all pending writes flush to main DB file
+      try {
+        await db.customStatement('PRAGMA wal_checkpoint(FULL)');
+      } catch (_) {}
 
+      // 2. Verify the DB file actually exists
       final dbFile = await _getDbFile();
       if (!await dbFile.exists()) {
+        return null; // explicitly return null = failure
+      }
+
+      // 3. Copy to documents directory with timestamp name
+      final dir = await getApplicationDocumentsDirectory();
+      final ts = _timestamp();
+      final backupFile = File(p.join(dir.path, 'BillMed_backup_$ts.db'));
+      await dbFile.copy(backupFile.path);
+
+      // 4. Verify the copy actually worked
+      if (!await backupFile.exists() || await backupFile.length() < 100) {
         return null;
       }
 
-      // Save to app documents with timestamp
-      final dir = await getApplicationDocumentsDirectory();
-      final timestamp = DateFormat.fromStr(DateTime.now());
-      final backupFile =
-          File(p.join(dir.path, 'BillMed_backup_$timestamp.db'));
-      await dbFile.copy(backupFile.path);
-
+      // 5. Share the file (user can save to Drive, WhatsApp, Files app etc.)
       await Share.shareXFiles(
         [XFile(backupFile.path)],
-        text: 'BillMed Backup - $timestamp',
+        text: 'BillMed Backup - $ts\nStore this file safely to restore your data.',
       );
+
       return backupFile.path;
     } catch (e) {
       return null;
     }
   }
 
-  // ─── Auto Backup (on app pause) ───────────────────────────────────────────
+  // ─── Auto Backup (silent, called on app pause) ──────────────────────────────
   static Future<void> autoBackup(BillMedDatabase db) async {
     try {
-      // Flush WAL
-      await db.customStatement('PRAGMA wal_checkpoint(PASSIVE)');
+      try {
+        await db.customStatement('PRAGMA wal_checkpoint(PASSIVE)');
+      } catch (_) {}
 
       final dbFile = await _getDbFile();
       if (!await dbFile.exists()) return;
 
       final dir = await getApplicationDocumentsDirectory();
-      final backup =
-          File(p.join(dir.path, 'BillMed_auto_backup.db'));
+      final backup = File(p.join(dir.path, 'BillMed_auto_backup.db'));
       await dbFile.copy(backup.path);
     } catch (_) {
       // Silent fail — auto backup is best-effort
     }
   }
 
-  // ─── Restore from Backup ───────────────────────────────────────────────────
-  /// Returns: 'success', 'cancelled', or 'invalid'
+  // ─── Restore from Backup ────────────────────────────────────────────────────
   static Future<RestoreResult> importBackup(BillMedDatabase db) async {
+    // 1. Pick file
     FilePickerResult? result;
     try {
       result = await FilePicker.platform.pickFiles(
@@ -79,9 +89,12 @@ class BackupService {
     final source = File(sourcePath);
     if (!await source.exists()) return RestoreResult.invalid;
 
-    // Validate: check SQLite magic header (first 16 bytes = "SQLite format 3\000")
+    // 2. Validate: check SQLite magic header
     try {
-      final header = await source.openRead(0, 16).first;
+      final raf = source.openSync();
+      final header = List<int>.filled(16, 0);
+      raf.readIntoSync(header);
+      raf.closeSync();
       final magic = String.fromCharCodes(header.take(15));
       if (!magic.startsWith('SQLite format 3')) {
         return RestoreResult.invalid;
@@ -91,33 +104,36 @@ class BackupService {
     }
 
     try {
-      // Checkpoint + close DB before replacing the file
-      await db.customStatement('PRAGMA wal_checkpoint(FULL)');
-      await db.close();
+      // 3. Checkpoint current DB
+      try {
+        await db.customStatement('PRAGMA wal_checkpoint(FULL)');
+      } catch (_) {}
 
-      final dest = await _getDbFile();
-
-      // Backup current DB before overwriting (safety net)
-      final dir = await getApplicationDocumentsDirectory();
-      final safety = File(p.join(dir.path, 'billmed_pre_restore.db'));
-      if (await dest.exists()) {
-        await dest.copy(safety.path);
+      // 4. Safety backup of current DB
+      final dbFile = await _getDbFile();
+      if (await dbFile.exists()) {
+        final dir = await getApplicationDocumentsDirectory();
+        final safety = File(p.join(dir.path, 'BillMed_pre_restore_${_timestamp()}.db'));
+        await dbFile.copy(safety.path);
       }
 
-      await source.copy(dest.path);
+      // 5. Close DB, replace file, done
+      await db.close();
+      await source.copy(dbFile.path);
+
       return RestoreResult.success;
     } catch (_) {
       return RestoreResult.invalid;
     }
   }
+
+  static String _timestamp() {
+    final d = DateTime.now();
+    return '${d.year}${_pad(d.month)}${_pad(d.day)}_${_pad(d.hour)}${_pad(d.minute)}';
+  }
+
+  static String _pad(int n) => n.toString().padLeft(2, '0');
 }
 
-// ─── Result enum ──────────────────────────────────────────────────────────────
+// ─── Result types ─────────────────────────────────────────────────────────────
 enum RestoreResult { success, cancelled, invalid }
-
-// Simple date formatter (avoids intl import in service layer)
-class DateFormat {
-  static String fromStr(DateTime d) =>
-      '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}_'
-      '${d.hour.toString().padLeft(2, '0')}${d.minute.toString().padLeft(2, '0')}';
-}

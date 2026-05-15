@@ -8,10 +8,7 @@ import 'bill_detail_screen.dart';
 import '../scanner/bill_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 
-final allBillsProvider = FutureProvider<List<Bill>>((ref) async {
-  final db = ref.watch(databaseProvider);
-  return db.getAllBills();
-});
+
 
 final distributorsMapProvider = FutureProvider<Map<int, Distributor>>((ref) async {
   final db = ref.watch(databaseProvider);

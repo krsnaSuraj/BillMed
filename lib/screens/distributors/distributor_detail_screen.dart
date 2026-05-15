@@ -8,11 +8,6 @@ import '../bills/bill_detail_screen.dart';
 import '../scanner/bill_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 
-final _billsProvider = FutureProvider.family<List<Bill>, int>((ref, distId) async {
-  final db = ref.watch(databaseProvider);
-  return db.getBillsByDistributor(distId);
-});
-
 class DistributorDetailScreen extends ConsumerWidget {
   final int distributorId;
   const DistributorDetailScreen({super.key, required this.distributorId});
@@ -20,7 +15,8 @@ class DistributorDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final distAsync = ref.watch(distributorListProvider);
-    final billsAsync = ref.watch(_billsProvider(distributorId));
+    // Use real-time stream for bills — auto-refreshes on any change
+    final billsAsync = ref.watch(billsStreamProvider(distributorId));
 
     return Scaffold(
       appBar: AppBar(
@@ -31,12 +27,24 @@ class DistributorDetailScreen extends ConsumerWidget {
             tooltip: 'Scan Bill',
             onPressed: () => _scanBill(context, ref),
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              ref.invalidate(billsStreamProvider(distributorId));
+              ref.invalidate(distributorListProvider);
+            },
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(distributorId: distributorId)));
-          if (result == true) ref.invalidate(_billsProvider(distributorId));
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddBillScreen(distributorId: distributorId)),
+          );
+          // Stream auto-refreshes, but invalidate to be sure
+          ref.invalidate(billsStreamProvider(distributorId));
         },
         child: const Icon(Icons.add),
       ),
@@ -94,14 +102,22 @@ class DistributorDetailScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+                Icon(Icons.receipt_long_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2)),
                 const SizedBox(height: 12),
-                const Text('No bills yet', style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+                Text('No bills yet',
+                    style: TextStyle(
+                        fontSize: 16,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: () async {
-                    final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddBillScreen(distributorId: distributorId)));
-                    if (result == true) ref.invalidate(_billsProvider(distributorId));
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => AddBillScreen(distributorId: distributorId)),
+                    );
                   },
                   icon: const Icon(Icons.add),
                   label: const Text('Add Bill'),
@@ -111,7 +127,9 @@ class DistributorDetailScreen extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_billsProvider(distributorId)),
+          onRefresh: () async {
+            ref.invalidate(billsStreamProvider(distributorId));
+          },
           child: ListView.builder(
             padding: const EdgeInsets.only(top: 8, bottom: 80),
             itemCount: bills.length,
@@ -130,8 +148,10 @@ class DistributorDetailScreen extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)));
-          ref.invalidate(_billsProvider(distributorId));
+          await Navigator.push(
+              context, MaterialPageRoute(builder: (_) => BillDetailScreen(billId: bill.id)));
+          // Stream auto-refreshes status badges, but invalidate bills list too
+          ref.invalidate(billsStreamProvider(distributorId));
         },
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -139,7 +159,9 @@ class DistributorDetailScreen extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                    color: AppColors.info.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.receipt, color: AppColors.info, size: 22),
               ),
               const SizedBox(width: 12),
@@ -147,12 +169,23 @@ class DistributorDetailScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('#${bill.billNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                    Text('${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text('#${bill.billNumber}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
+                    Text(
+                        '${bill.billDate.day}/${bill.billDate.month}/${bill.billDate.year}',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.55))),
                   ],
                 ),
               ),
-              Text('₹${bill.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Rs.${bill.amount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(width: 8),
               StatusBadgeWidget(billId: bill.id),
             ],
