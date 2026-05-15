@@ -58,21 +58,23 @@ class BankStatementService {
 
   // ── Bank detection ─────────────────────────────────────────────────────────
   static String _detectBank(String text) {
+    // Only scan the first part (headers), not transaction descriptions
+    final header = text.substring(0, text.length > 2000 ? 2000 : text.length).toLowerCase();
     final t = text.toLowerCase();
-    if (t.contains('hdfc bank')) return 'HDFC';
-    if (t.contains('icici bank')) return 'ICICI';
-    if (t.contains('state bank of india') || t.contains('sbi')) return 'SBI';
-    if (t.contains('punjab national bank') || t.contains('pnb')) return 'PNB';
-    if (t.contains('axis bank')) return 'AXIS';
-    if (t.contains('kotak mahindra') || t.contains('kotak bank')) return 'KOTAK';
-    if (t.contains('bank of baroda') || t.contains('bob')) return 'BOB';
-    if (t.contains('canara bank')) return 'CANARA';
-    if (t.contains('union bank')) return 'UNION';
-    if (t.contains('bank of india')) return 'BOI';
-    if (t.contains('yes bank')) return 'YES';
-    if (t.contains('indusind bank')) return 'INDUSIND';
-    if (t.contains('federal bank')) return 'FEDERAL';
-    if (t.contains('idfc')) return 'IDFC';
+    if (header.contains('canara bank') || t.contains('cnrb')) return 'CANARA';
+    if (header.contains('state bank of india') || header.contains('sbi')) return 'SBI';
+    if (header.contains('hdfc bank') || t.contains('hdfc bank ltd')) return 'HDFC';
+    if (header.contains('icici bank') || t.contains('icici bank')) return 'ICICI';
+    if (header.contains('punjab national bank') || header.contains('pnb')) return 'PNB';
+    if (header.contains('axis bank') || t.contains('axis bank')) return 'AXIS';
+    if (header.contains('kotak mahindra') || header.contains('kotak bank')) return 'KOTAK';
+    if (header.contains('bank of baroda') || header.contains('bob')) return 'BOB';
+    if (header.contains('union bank')) return 'UNION';
+    if (header.contains('bank of india')) return 'BOI';
+    if (header.contains('yes bank')) return 'YES';
+    if (header.contains('indusind bank')) return 'INDUSIND';
+    if (header.contains('federal bank')) return 'FEDERAL';
+    if (header.contains('idfc')) return 'IDFC';
     return 'GENERIC';
   }
 
@@ -264,8 +266,7 @@ class BankStatementService {
       if (i < lines.length && valueDateRe.hasMatch(lines[i].trim())) i++;
 
       // Optional cheque number (long digit string)
-      String cheque = '';
-      if (i < lines.length && RegExp(r'^\d{6,}$').hasMatch(lines[i].trim())) { cheque = lines[i].trim(); i++; }
+      if (i < lines.length && RegExp(r'^\d{6,}$').hasMatch(lines[i].trim())) { i++; }
 
       // Description lines
       final descLines = <String>[];
@@ -275,9 +276,8 @@ class BankStatementService {
         descLines.add(p); i++;
       }
 
-      // Branch code
-      String branchCode = '';
-      if (i < lines.length && RegExp(r'^\d{2,4}$').hasMatch(lines[i].trim())) { branchCode = lines[i].trim(); i++; }
+      // Branch code (skip)
+      if (i < lines.length && RegExp(r'^\d{2,4}$').hasMatch(lines[i].trim())) { i++; }
 
       // Amounts
       final amounts = <double>[];
