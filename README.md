@@ -154,9 +154,32 @@ Options:
 
 ---
 
-## 📦 Version
+## 📦 Version History
 
-See `pubspec.yaml` for current version. Use `UPDATE.bat` to bump version and push.
+| Version | Key Changes |
+|---------|-------------|
+| v2.5.2 | Batch insert + duplicate detection — crash fix for large imports |
+| v2.5.1 | NotoSans font fix, CA export options dialog, zero lint |
+| v2.5.0 | Multi-bank parser, CA report overhaul, phone transfer guide |
+| v2.4.1 | Fresh build with all pending updates |
+| v2.4.0 | Removed 'payment' from debit keywords (UPI/CR false positive fix) |
+| v2.3.9 | Gemini error no longer blocks local parser + byte-level stream search |
+| v2.3.8 | 'paid' keyword removed from debit detection |
+| v2.3.7 | PDF extraction overhaul: BT/ET block parsing, ' operator |
+| v2.3.6 | Final cleanup: unused imports removed, zero analyzer issues |
+| v2.3.5 | Opening/closing balance multi-line detection fix |
+| v2.3.4 | CA Report PDF: full transaction table with opening/closing balance |
+| v2.3.3 | Canara bank statement fix: line merging, UPI/CR keyword fix |
+| v2.3.2 | Bank parser: integer amounts, credit detection |
+| v2.3.1 | Release build — CI/CD release fix |
+| v2.3.0 | Gemini AI integration, bank transactions view, CA report PDF |
+| v2.2.2 | Bug fixes: backup crash, notification fix |
+| v2.2.0 | Bank statement import with golden rule verification |
+| v2.1.0 | CSV export, reports, dark mode |
+| v2.0.0 | Complete UI redesign |
+| v1.0.0 | Initial release |
+
+Current version: `pubspec.yaml` — use `UPDATE.bat` to bump and push.
 
 ---
 
