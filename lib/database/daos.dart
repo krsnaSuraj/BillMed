@@ -126,19 +126,19 @@ class BillMedDao {
 
   Future<BillWithStatus> getBillWithStatus(Bill bill) async {
     final paid = await db.getTotalPaidForBill(bill.id);
-    final remaining = bill.amount - paid;
+    final diff = bill.amount - paid;
     String status;
     if (paid <= 0) {
       status = 'Unpaid';
     } else if (paid < bill.amount) {
       status = 'Partial';
     } else {
-      status = 'Paid';
+      status = diff == 0 ? 'Paid' : 'Paid'; // overpayment still shows Paid
     }
     return BillWithStatus(
       bill: bill,
       paidAmount: paid,
-      remainingAmount: remaining > 0 ? remaining : 0,
+      remainingAmount: diff > 0 ? diff : 0,
       status: status,
     );
   }

@@ -155,6 +155,14 @@ Options:
 
 ---
 
+## 📦 Version History
+
+| Version | Changes |
+|---------|---------|
+| v2.6.0 | Auto-refresh dashboard, overpayment handling, CA report section fix, icon fix, zero analyze issues |
+
+---
+
 Current version: `pubspec.yaml` — use `UPDATE.bat` to bump and push.
 
 ---

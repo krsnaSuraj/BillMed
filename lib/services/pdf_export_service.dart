@@ -23,9 +23,9 @@ class PdfExportService {
     italic: pw.Font.helveticaOblique(),
   );
 
-  /// Remove non-printable ASCII chars that garble PDF fonts.
+  /// Remove only control chars that garble PDF fonts (keep unicode like ₹, Hindi)
   static String _s(String t) =>
-      t.replaceAll(RegExp(r'[^\x20-\x7E]'), ' ').replaceAll(RegExp(r'  +'), ' ').trim();
+      t.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
 
   static String _money(double v) => 'Rs.${v.toStringAsFixed(2)}';
   static String _date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
@@ -316,135 +316,14 @@ class PdfExportService {
             pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
           ],
         ),
-        build: (ctx) => [
-          if (cfg.inclPurchaseSummary) ...[
-            _sectionHeader('1. Purchase & Payables Summary'),
-            _summaryBox(PdfColors.red50, PdfColors.red100, [
-              _amtRow('Total Purchases (Gross)', _money(totalPurchase), PdfColors.black),
-              _amtRow('Total Bills', '${allBills.length}', PdfColors.grey700),
-              _amtRow('Avg. Bill Value', allBills.isEmpty ? 'N/A' : _money(totalPurchase / allBills.length), PdfColors.grey700),
-              pw.Divider(height: 8, color: PdfColors.red200),
-              _amtRow('Total Paid to Suppliers', _money(totalPaid), PdfColors.green700),
-              _amtRow('Outstanding Payable', _money(outstanding.toDouble()), outstanding > 0 ? PdfColors.red700 : PdfColors.green700),
-              _amtRow('Payment Rate', totalPurchase > 0 ? '${(totalPaid/totalPurchase*100).toStringAsFixed(1)}%' : 'N/A', PdfColors.indigo700),
-            ]),
-            pw.SizedBox(height: 14),
-          ],
-
-          if (cfg.inclBankCashFlow) _sectionHeader('2. Bank Account â€” Cash Flow Summary'),
-          if (allTxns.isEmpty)
-            pw.Text('No bank transactions for $fyLabel.', style: const pw.TextStyle(color: PdfColors.grey))
-          else ...[
-            _summaryBox(PdfColors.green50, PdfColors.green100, [
-              _amtRow('Total Credits (Money In)', _money(totalCredit), PdfColors.green700),
-              _amtRow('Total Debits (Money Out)', _money(totalDebit), PdfColors.red700),
-              pw.Divider(height: 8, color: PdfColors.green200),
-              _amtRow('Net Cash Flow', _money(net), net >= 0 ? PdfColors.green700 : PdfColors.red700),
-              _amtRow('Closing Balance', _money(closingBal), PdfColors.indigo700),
-              _amtRow('Total Transactions', '${allTxns.length}', PdfColors.grey700),
-            ]),
-            pw.SizedBox(height: 14),
-          ],
-
-          if (cfg.inclGstEstimate) ...[
-            _sectionHeader('3. GST Input Tax Estimate (Approximate)'),
-            _summaryBox(PdfColors.orange50, PdfColors.orange100, [
-              _amtRow('Purchase Turnover', _money(totalPurchase), PdfColors.black),
-              _amtRow('Estimated Input GST @5%', _money(gstApprox), PdfColors.green700),
-              _amtRow('Net Purchase (Base Value)', _money(totalPurchase - gstApprox), PdfColors.indigo700),
-              pw.SizedBox(height: 4),
-              pw.Text('* GST slabs vary: 0%/5%/12%/18%. Verify with actual invoices.',
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
-            ]),
-            pw.SizedBox(height: 14),
-          ],
-
-          if (cfg.inclMonthlyBreakdown && sortedMonths.isNotEmpty) ...[
-            _sectionHeader('4. Monthly Bank Breakdown ($fyLabel)'),
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              cellHeight: 20,
-              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-              headers: ['Month', 'Credits (In)', 'Debits (Out)', 'Net'],
-              data: sortedMonths.map((e) {
-                final dr = e.value['debit'] ?? 0;
-                final cr = e.value['credit'] ?? 0;
-                return [_fmtMonthKey(e.key), _money(cr), _money(dr), _money(cr - dr)];
-              }).toList(),
-            ),
-            pw.SizedBox(height: 14),
-          ],
-
-          if (cfg.inclSupplierTable && allBills.isNotEmpty) ...[
-            _sectionHeader('5. Supplier-wise Purchase ($fyLabel)'),
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
-              cellStyle: const pw.TextStyle(fontSize: 8),
-              cellHeight: 18,
-              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(52),
-                1: const pw.FixedColumnWidth(60),
-                2: const pw.FlexColumnWidth(),
-                3: const pw.FixedColumnWidth(62),
-                4: const pw.FixedColumnWidth(62),
-                5: const pw.FixedColumnWidth(52),
-              },
-              headers: ['Bill Date', 'Bill No.', 'Supplier', 'Amount', 'Paid', 'Status'],
-              data: allBills.map((b) {
-                final paid = paidMap[b.id] ?? 0;
-                final due = b.amount - paid;
-                return [
-                  _date(b.billDate),
-                  '#${b.billNumber}',
-                  (_s(distMap[b.distributorId]?.name ?? 'Unknown')).length > 20
-                      ? '${_s(distMap[b.distributorId]?.name ?? 'Unknown').substring(0, 20)}...'
-                      : _s(distMap[b.distributorId]?.name ?? 'Unknown'),
-                  _money(b.amount),
-                  _money(paid),
-                  due <= 0.01 ? 'PAID' : 'DUE',
-                ];
-              }).toList(),
-            ),
-            pw.SizedBox(height: 14),
-          ],
-
-          if (cfg.inclTransactionDetails && allTxns.isNotEmpty) ...[
-            _sectionHeader('6. Bank Transaction Details ($fyLabel)'),
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
-              cellStyle: const pw.TextStyle(fontSize: 7),
-              cellHeight: 16,
-              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(48),
-                1: const pw.FlexColumnWidth(),
-                2: const pw.FixedColumnWidth(58),
-                3: const pw.FixedColumnWidth(58),
-                4: const pw.FixedColumnWidth(60),
-              },
-              headers: ['Date', 'Description', 'Debit', 'Credit', 'Balance'],
-              data: allTxns.map((t) => [
-                _dateShort(t.txnDate),
-                t.description.length > 50 ? '${t.description.substring(0, 50)}...' : t.description,
-                t.debit > 0 ? _money(t.debit) : '',
-                t.credit > 0 ? _money(t.credit) : '',
-                _money(t.balance),
-              ]).toList(),
-            ),
-          ],
-        ],
+        build: (ctx) => _buildCaSections(cfg, allTxns, allBills, distMap, paidMap, totalPurchase, totalPaid, outstanding.toDouble(), totalDebit, totalCredit, net, gstApprox, closingBal, sortedMonths, fyLabel),
       ),
     );
 
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/BillMed_CA_Report_${DateTime.now().millisecondsSinceEpoch}.pdf');
     await file.writeAsBytes(await pdf.save());
-    Share.shareXFiles([XFile(file.path)], text: 'BillMed CA Report â€” $fyLabel');
+    Share.shareXFiles([XFile(file.path)], text: 'BillMed CA Report - $fyLabel');
   }
 
   static pw.Widget _sectionHeader(String title) => pw.Padding(
@@ -466,7 +345,87 @@ class PdfExportService {
   }
 
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  static List<pw.Widget> _buildCaSections(
+    CaReportConfig cfg, List<BankTransaction> allTxns, List<Bill> allBills,
+    Map<int, Distributor> distMap, Map<int, double> paidMap,
+    double totalPurchase, double totalPaid, double outstanding,
+    double totalDebit, double totalCredit, double net, double gstApprox,
+    double closingBal, List<MapEntry<String, Map<String, double>>> sortedMonths,
+    String fyLabel,
+  ) {
+    int sec = 0; final w = <pw.Widget>[];
+    void a(String l, List<pw.Widget> ws) { sec++; w.add(_sectionHeader('$sec. $l')); w.addAll(ws); w.add(pw.SizedBox(height: 14)); }
+    if (cfg.inclPurchaseSummary) { a('Purchase & Payables Summary', [
+      _summaryBox(PdfColors.red50, PdfColors.red100, [
+        _amtRow('Total Purchases (Gross)', _money(totalPurchase), PdfColors.black),
+        _amtRow('Total Bills', '${allBills.length}', PdfColors.grey700),
+        _amtRow('Avg. Bill Value', allBills.isEmpty ? 'N/A' : _money(totalPurchase / allBills.length), PdfColors.grey700),
+        pw.Divider(height: 8, color: PdfColors.red200),
+        _amtRow('Total Paid to Suppliers', _money(totalPaid), PdfColors.green700),
+        _amtRow('Outstanding Payable', _money(outstanding.toDouble()), outstanding > 0 ? PdfColors.red700 : PdfColors.green700),
+        _amtRow('Payment Rate', totalPurchase > 0 ? '${(totalPaid/totalPurchase*100).toStringAsFixed(1)}%' : 'N/A', PdfColors.indigo700),
+      ]),
+    ]); }
+    if (cfg.inclBankCashFlow) { a('Bank Account - Cash Flow Summary', allTxns.isEmpty ? [
+      pw.Text('No bank transactions for $fyLabel.', style: const pw.TextStyle(color: PdfColors.grey))
+    ] : [
+      _summaryBox(PdfColors.green50, PdfColors.green100, [
+        _amtRow('Total Credits (Money In)', _money(totalCredit), PdfColors.green700),
+        _amtRow('Total Debits (Money Out)', _money(totalDebit), PdfColors.red700),
+        pw.Divider(height: 8, color: PdfColors.green200),
+        _amtRow('Net Cash Flow', _money(net), net >= 0 ? PdfColors.green700 : PdfColors.red700),
+        _amtRow('Closing Balance', _money(closingBal), PdfColors.indigo700),
+        _amtRow('Total Transactions', '${allTxns.length}', PdfColors.grey700),
+      ]),
+    ]); }
+    if (cfg.inclGstEstimate) { a('GST Input Tax Estimate (Approximate)', [
+      _summaryBox(PdfColors.orange50, PdfColors.orange100, [
+        _amtRow('Purchase Turnover', _money(totalPurchase), PdfColors.black),
+        _amtRow('Estimated Input GST @5%', _money(gstApprox), PdfColors.green700),
+        _amtRow('Net Purchase (Base Value)', _money(totalPurchase - gstApprox), PdfColors.indigo700),
+        pw.SizedBox(height: 4),
+        pw.Text('* GST slabs vary.', style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
+      ]),
+    ]); }
+    if (cfg.inclMonthlyBreakdown && sortedMonths.isNotEmpty) { a('Monthly Bank Breakdown ($fyLabel)', [
+      pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
+        cellStyle: const pw.TextStyle(fontSize: 9), cellHeight: 20,
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        headers: ['Month', 'Credits (In)', 'Debits (Out)', 'Net'],
+        data: sortedMonths.map((e) => [_fmtMonthKey(e.key), _money(e.value['credit'] ?? 0), _money(e.value['debit'] ?? 0), _money((e.value['credit'] ?? 0) - (e.value['debit'] ?? 0))]).toList(),
+      ),
+    ]); }
+    if (cfg.inclSupplierTable && allBills.isNotEmpty) { a('Supplier-wise Purchase ($fyLabel)', [
+      pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.white),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
+        cellStyle: const pw.TextStyle(fontSize: 8), cellHeight: 18,
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        columnWidths: {0: const pw.FixedColumnWidth(52), 1: const pw.FixedColumnWidth(60), 2: const pw.FlexColumnWidth(), 3: const pw.FixedColumnWidth(62), 4: const pw.FixedColumnWidth(62), 5: const pw.FixedColumnWidth(52)},
+        headers: ['Bill Date', 'Bill No.', 'Supplier', 'Amount', 'Paid', 'Status'],
+        data: allBills.map((b) {
+          final paid = paidMap[b.id] ?? 0;
+          return [_date(b.billDate), '#${b.billNumber}', _s(distMap[b.distributorId]?.name ?? 'Unknown'), _money(b.amount), _money(paid), b.amount - paid <= 0.01 ? 'PAID' : 'DUE'];
+        }).toList(),
+      ),
+    ]); }
+    if (cfg.inclTransactionDetails && allTxns.isNotEmpty) { a('Bank Transaction Details ($fyLabel)', [
+      pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.white),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
+        cellStyle: const pw.TextStyle(fontSize: 7), cellHeight: 16,
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        columnWidths: {0: const pw.FixedColumnWidth(48), 1: const pw.FlexColumnWidth(), 2: const pw.FixedColumnWidth(58), 3: const pw.FixedColumnWidth(58), 4: const pw.FixedColumnWidth(60)},
+        headers: ['Date', 'Description', 'Debit', 'Credit', 'Balance'],
+        data: allTxns.map((t) => [_dateShort(t.txnDate), _s(t.description), t.debit > 0 ? _money(t.debit) : '', t.credit > 0 ? _money(t.credit) : '', _money(t.balance)]).toList(),
+      ),
+    ]); }
+    return w;
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
 
   static pw.Widget _infoRow(String label, String value) {
     return pw.Padding(

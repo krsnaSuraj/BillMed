@@ -23,11 +23,30 @@ final overdueCountProvider = FutureProvider<int>((ref) async {
   }).length;
 });
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-refresh every 8 seconds when dashboard is visible
+    Future.delayed(const Duration(seconds: 8), _autoRefresh);
+  }
+
+  void _autoRefresh() {
+    if (mounted) {
+      ref.invalidate(dashboardProvider);
+      ref.invalidate(overdueCountProvider);
+      Future.delayed(const Duration(seconds: 8), _autoRefresh);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final summaryAsync = ref.watch(dashboardProvider);
     final overdueAsync = ref.watch(overdueCountProvider);
 
@@ -48,12 +67,6 @@ class DashboardScreen extends ConsumerWidget {
             const Text('BillMed'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => ref.invalidate(dashboardProvider),
-          ),
-        ],
       ),
       body: summaryAsync.when(
         data: (data) => RefreshIndicator(

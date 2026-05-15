@@ -1,28 +1,31 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Brand colors
+  // Brand colors — deep indigo + teal accent
   static const Color primary = Color(0xFF1A237E);
   static const Color primaryLight = Color(0xFF534BAE);
   static const Color accent = Color(0xFF00BFA5);
   static const Color accentLight = Color(0xFF5DF2D6);
+  static const Color accentDark = Color(0xFF009688);
 
-  // Light mode colors
-  static const Color background = Color(0xFFF5F7FA);
+  // Light mode
+  static const Color background = Color(0xFFF0F2F8);
   static const Color card = Colors.white;
   static const Color textPrimary = Color(0xFF1A1A2E);
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color divider = Color(0xFFE5E7EB);
+  static const Color surfaceVariant = Color(0xFFF8F9FE);
 
-  // Dark mode colors
-  static const Color darkBg = Color(0xFF0F0F23);
+  // Dark mode
+  static const Color darkBg = Color(0xFF0D0D1A);
   static const Color darkCard = Color(0xFF1A1A35);
   static const Color darkSurface = Color(0xFF12122A);
   static const Color darkText = Color(0xFFF1F1F1);
   static const Color darkTextSecondary = Color(0xFFB0B8C8);
   static const Color darkDivider = Color(0xFF2A2A50);
+  static const Color darkSurfaceVariant = Color(0xFF151530);
 
-  // Semantic colors (same in both modes)
+  // Semantic
   static const Color success = Color(0xFF10B981);
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
@@ -84,36 +87,30 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor:
-          isDark ? AppColors.darkBg : AppColors.background,
+      scaffoldBackgroundColor: isDark ? AppColors.darkBg : AppColors.background,
       // ── AppBar ──────────────────────────────────────────────────────────────
       appBarTheme: AppBarTheme(
-        backgroundColor:
-            isDark ? AppColors.darkSurface : AppColors.primary,
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.primary,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
         actionsIconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-          letterSpacing: 0.5,
-        ),
+        titleTextStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: 0.3),
       ),
       // ── Cards ───────────────────────────────────────────────────────────────
       cardTheme: CardThemeData(
-        elevation: isDark ? 0 : 1,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
+        elevation: isDark ? 0 : 2,
+        shadowColor: isDark ? Colors.transparent : Colors.black.withValues(alpha: 0.06),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           side: isDark
               ? BorderSide(color: AppColors.darkDivider, width: 0.5)
               : BorderSide.none,
         ),
         color: cardBg,
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        clipBehavior: Clip.antiAlias,
       ),
       // ── Buttons ─────────────────────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
