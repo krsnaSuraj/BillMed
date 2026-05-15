@@ -109,7 +109,7 @@ class PdfExportService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _infoRow('Bill No.', bill.billNumber),
+                    _infoRow('Bill No.', _s(bill.billNumber)),
                     _infoRow('Date', _date(bill.billDate)),
                   ],
                 ),
@@ -117,17 +117,17 @@ class PdfExportService {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text(dist.name,
+                      pw.Text(_s(dist.name),
                           style: pw.TextStyle(
                               fontSize: 14,
                               fontWeight: pw.FontWeight.bold,
                               color: PdfColors.indigo700)),
                       if (dist.company != null && dist.company!.isNotEmpty)
-                        pw.Text(dist.company!,
+                        pw.Text(_s(dist.company!),
                             style: const pw.TextStyle(
                                 fontSize: 11, color: PdfColors.grey)),
                       if (dist.phone != null && dist.phone!.isNotEmpty)
-                        pw.Text(dist.phone!,
+                        pw.Text(_s(dist.phone!),
                             style: const pw.TextStyle(
                                 fontSize: 11, color: PdfColors.grey)),
                     ],
@@ -164,7 +164,7 @@ class PdfExportService {
                   style: pw.TextStyle(
                       fontWeight: pw.FontWeight.bold, fontSize: 12)),
               pw.SizedBox(height: 4),
-              pw.Text(bill.notes!,
+              pw.Text(_s(bill.notes ?? ''),
                   style:
                       const pw.TextStyle(fontSize: 11, color: PdfColors.grey)),
               pw.SizedBox(height: 16),
@@ -188,9 +188,9 @@ class PdfExportService {
                     .map((p) => [
                           _date(p.paymentDate),
                           _money(p.amount),
-                          p.mode,
-                          p.referenceNo ?? '-',
-                          p.notes ?? '-',
+                          _s(p.mode),
+                          _s(p.referenceNo ?? '-'),
+                          _s(p.notes ?? '-'),
                         ])
                     .toList(),
               ),

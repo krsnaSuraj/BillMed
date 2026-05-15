@@ -245,8 +245,8 @@ class BankStatementService {
       final amounts = <double>[];
       while (i < lines.length && amounts.length < 2) {
         final p = lines[i].trim();
-        if (amtRe.hasMatch(p)) { final v = double.tryParse(p.replaceAll(',', '')); if (v != null && v > 0) amounts.add(v); i++; }
-        else break;
+        if (amtRe.hasMatch(p)) { final v = double.tryParse(p.replaceAll(',', '')); if (v != null && v > 0) { amounts.add(v); } i++; }
+        else { break; }
       }
       if (amounts.isEmpty) continue;
 
@@ -358,7 +358,7 @@ class BankStatementService {
           final pre = String.fromCharCodes(bytes.sublist(i > 300 ? i - 300 : 0, i), );
           final isFlate = pre.contains('FlateDecode');
           int ds = i + 6;
-          while (ds < bytes.length && (bytes[ds] == 10 || bytes[ds] == 13)) ds++;
+          while (ds < bytes.length && (bytes[ds] == 10 || bytes[ds] == 13)) { ds++; }
           // Find endstream
           int de = ds;
           while (de < bytes.length - 9) {
@@ -367,7 +367,7 @@ class BankStatementService {
           }
           if (de > ds && de < bytes.length) {
             int end = de;
-            while (end > ds && (bytes[end-1]==10||bytes[end-1]==13||bytes[end-1]==32)) end--;
+            while (end > ds && (bytes[end-1]==10||bytes[end-1]==13||bytes[end-1]==32)) { end--; }
             final raw = bytes.sublist(ds, end);
             String content;
             if (isFlate) {
@@ -378,14 +378,20 @@ class BankStatementService {
             // Extract parenthesized strings
             for (final m in RegExp(r'\(([^)]*)\)').allMatches(content)) {
               final t = m.group(1)!.replaceAll('\\n', '\n').replaceAll('\\(', '(').replaceAll('\\)', ')').trim();
-              if (t.isNotEmpty && RegExp(r'[a-zA-Z0-9]').hasMatch(t)) buf.writeln(t);
+              if (t.isNotEmpty && RegExp(r'[a-zA-Z0-9]').hasMatch(t)) {
+                buf.writeln(t);
+              }
             }
             i = de + 9;
-          } else { i++; }
-        } else { i++; }
+          } else {
+            i++;
+          }
+        } else {
+          i++;
+        }
       }
-      final result = buf.toString().trim();
       // Fallback: raw parenthesized text if stream extraction yielded nothing
+      final result = buf.toString().trim();
       if (result.isEmpty) {
         final raw = String.fromCharCodes(bytes);
         final fb = StringBuffer();

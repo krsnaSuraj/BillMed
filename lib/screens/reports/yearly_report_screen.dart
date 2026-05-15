@@ -37,7 +37,8 @@ class _YearlyReportScreenState extends ConsumerState<YearlyReportScreen>
   /// FY start = Apr 1 of _fyYear; FY end = Mar 31 of (_fyYear+1)
   DateTime get _fyStart => DateTime(_fyYear, 4, 1);
   DateTime get _fyEnd   => DateTime(_fyYear + 1, 3, 31, 23, 59, 59);
-  String get _fyLabel   => 'FY ${_fyYear}-${(_fyYear + 1).toString().substring(2)}';
+  String get _fyLabel   => 'FY $_fyYear-${(_fyYear + 1).toString().substring(2)}';
+
 
   @override
   Widget build(BuildContext context) {
