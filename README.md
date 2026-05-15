@@ -3,10 +3,10 @@
 > **A production-grade Flutter application for Indian medical shop owners** — manage suppliers, bills, payments, import bank statements, and generate CA-ready financial reports. Fully offline-first with optional AI enhancement.
 
 <p align="center">
-  <img src="screenshots/dashboard.jpeg" width="200" alt="Dashboard"/>
-  <img src="screenshots/bills_list.jpeg" width="200" alt="Bills"/>
-  <img src="screenshots/bank_import.jpeg" width="200" alt="Bank Import"/>
-  <img src="screenshots/ca_export_dialog.jpeg" width="200" alt="CA Report"/>
+  <img src="screenshots/Dashboard.jpeg" width="200" alt="Dashboard"/>
+  <img src="screenshots/Bills.jpeg" width="200" alt="Bills"/>
+  <img src="screenshots/statement.jpeg" width="200" alt="Bank Import"/>
+  <img src="screenshots/Reports.jpeg" width="200" alt="Reports"/>
 </p>
 
 ---
@@ -75,21 +75,22 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="screenshots/dashboard.jpeg" width="180" alt="Dashboard"/>
-  <img src="screenshots/bills_list.jpeg" width="180" alt="Bills List"/>
-  <img src="screenshots/bank_import.jpeg" width="180" alt="Bank Import"/>
+  <img src="screenshots/Dashboard.jpeg" width="180" alt="Dashboard"/>
+  <img src="screenshots/Bills.jpeg" width="180" alt="Bills List"/>
+  <img src="screenshots/statement.jpeg" width="180" alt="Bank Statement"/>
   <img src="screenshots/preview_transactions.jpeg" width="180" alt="Preview Transactions"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/supplier_detail.jpeg" width="180" alt="Supplier Detail"/>
-  <img src="screenshots/reports.jpeg" width="180" alt="Reports"/>
-  <img src="screenshots/ca_export_dialog.jpeg" width="180" alt="CA Report Dialog"/>
-  <img src="screenshots/settings.jpeg" width="180" alt="Settings"/>
+  <img src="screenshots/Suppliers.jpeg" width="180" alt="Suppliers"/>
+  <img src="screenshots/Reports.jpeg" width="180" alt="Reports"/>
+  <img src="screenshots/Scan-Bill.jpeg" width="180" alt="Scan Bill"/>
+  <img src="screenshots/settings-1.jpeg" width="180" alt="Settings"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/add_bill.jpeg" width="180" alt="Add Bill"/>
+  <img src="screenshots/Add-supplier.jpeg" width="180" alt="Add Supplier"/>
+  <img src="screenshots/Settings-2.jpeg" width="180" alt="Settings 2"/>
 </p>
 
 ---
