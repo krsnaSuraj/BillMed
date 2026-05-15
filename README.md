@@ -84,7 +84,28 @@ flutter run
 ```bash
 flutter build apk --release
 ```
-Or use the included `UPDATE.bat` script on Windows.
+
+### UPDATE.bat — Build & Push Script (Windows)
+Included in the project root. Double-click to run.
+
+```
+Options:
+  1. Push + MINOR bump (2.4.X)   → new features/fixes, triggers GitHub APK build
+  2. Push + MAJOR bump (X.0.0)   → big releases, triggers GitHub APK build
+  3. Push + BUILD bump (x.x.X+1) → same release, NO new APK (just code push)
+  4. Local build ONLY             → builds APK for sharing/install
+  5. Local build + USB install    → builds and installs on phone via USB
+  6. Cancel
+```
+
+**When to use which:**
+| Option | Use Case |
+|--------|----------|
+| 1 | Bug fixes, new features — need new APK on GitHub |
+| 2 | Major app overhaul — reset minor version |
+| 3 | Quick code backup, doc updates — no APK needed |
+| 4 | Build APK for WhatsApp/USB sharing |
+| 5 | Build + direct install on phone via USB cable |
 
 ---
 
