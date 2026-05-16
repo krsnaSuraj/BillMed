@@ -12,7 +12,7 @@ class BillMedDatabase extends _$BillMedDatabase {
   BillMedDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -22,6 +22,9 @@ class BillMedDatabase extends _$BillMedDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(bankTransactions);
+      }
+      if (from < 3) {
+        await m.addColumn(bankTransactions, bankTransactions.isReversal);
       }
     },
   );

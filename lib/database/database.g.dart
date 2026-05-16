@@ -1155,6 +1155,14 @@ class $BankTransactionsTable extends BankTransactions
   late final GeneratedColumn<String> category = GeneratedColumn<String>(
       'category', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isReversalMeta =
+      const VerificationMeta('isReversal');
+  @override
+  late final GeneratedColumn<bool> isReversal = GeneratedColumn<bool>(
+      'is_reversal', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(false));
   static const VerificationMeta _importedAtMeta =
       const VerificationMeta('importedAt');
   @override
@@ -1173,6 +1181,7 @@ class $BankTransactionsTable extends BankTransactions
         balance,
         sourceFile,
         category,
+        isReversal,
         importedAt
       ];
   @override
@@ -1224,6 +1233,12 @@ class $BankTransactionsTable extends BankTransactions
       context.handle(_categoryMeta,
           category.isAcceptableOrUnknown(data['category']!, _categoryMeta));
     }
+    if (data.containsKey('is_reversal')) {
+      context.handle(
+          _isReversalMeta,
+          isReversal.isAcceptableOrUnknown(
+              data['is_reversal']!, _isReversalMeta));
+    }
     if (data.containsKey('imported_at')) {
       context.handle(
           _importedAtMeta,
@@ -1255,6 +1270,8 @@ class $BankTransactionsTable extends BankTransactions
           .read(DriftSqlType.string, data['${effectivePrefix}source_file']),
       category: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}category']),
+      isReversal: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_reversal']) ?? false,
       importedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}imported_at'])!,
     );
@@ -1275,6 +1292,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
   final double balance;
   final String? sourceFile;
   final String? category;
+  final bool isReversal;
   final DateTime importedAt;
   const BankTransaction(
       {required this.id,
@@ -1285,6 +1303,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
       required this.balance,
       this.sourceFile,
       this.category,
+      this.isReversal = false,
       required this.importedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1301,6 +1320,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
     if (!nullToAbsent || category != null) {
       map['category'] = Variable<String>(category);
     }
+    map['is_reversal'] = Variable<bool>(isReversal);
     map['imported_at'] = Variable<DateTime>(importedAt);
     return map;
   }
@@ -1319,6 +1339,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
       category: category == null && nullToAbsent
           ? const Value.absent()
           : Value(category),
+      isReversal: Value(isReversal),
       importedAt: Value(importedAt),
     );
   }
@@ -1335,6 +1356,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
       balance: serializer.fromJson<double>(json['balance']),
       sourceFile: serializer.fromJson<String?>(json['sourceFile']),
       category: serializer.fromJson<String?>(json['category']),
+      isReversal: serializer.fromJson<bool>(json['isReversal']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
     );
   }
@@ -1350,6 +1372,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
       'balance': serializer.toJson<double>(balance),
       'sourceFile': serializer.toJson<String?>(sourceFile),
       'category': serializer.toJson<String?>(category),
+      'isReversal': serializer.toJson<bool>(isReversal),
       'importedAt': serializer.toJson<DateTime>(importedAt),
     };
   }
@@ -1363,6 +1386,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
           double? balance,
           Value<String?> sourceFile = const Value.absent(),
           Value<String?> category = const Value.absent(),
+          bool? isReversal,
           DateTime? importedAt}) =>
       BankTransaction(
         id: id ?? this.id,
@@ -1373,6 +1397,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
         balance: balance ?? this.balance,
         sourceFile: sourceFile.present ? sourceFile.value : this.sourceFile,
         category: category.present ? category.value : this.category,
+        isReversal: isReversal ?? this.isReversal,
         importedAt: importedAt ?? this.importedAt,
       );
   BankTransaction copyWithCompanion(BankTransactionsCompanion data) {
@@ -1387,6 +1412,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
       sourceFile:
           data.sourceFile.present ? data.sourceFile.value : this.sourceFile,
       category: data.category.present ? data.category.value : this.category,
+      isReversal: data.isReversal.present ? data.isReversal.value : this.isReversal,
       importedAt:
           data.importedAt.present ? data.importedAt.value : this.importedAt,
     );
@@ -1403,6 +1429,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
           ..write('balance: $balance, ')
           ..write('sourceFile: $sourceFile, ')
           ..write('category: $category, ')
+          ..write('isReversal: $isReversal, ')
           ..write('importedAt: $importedAt')
           ..write(')'))
         .toString();
@@ -1410,7 +1437,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
 
   @override
   int get hashCode => Object.hash(id, txnDate, description, debit, credit,
-      balance, sourceFile, category, importedAt);
+      balance, sourceFile, category, isReversal, importedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1423,6 +1450,7 @@ class BankTransaction extends DataClass implements Insertable<BankTransaction> {
           other.balance == this.balance &&
           other.sourceFile == this.sourceFile &&
           other.category == this.category &&
+          other.isReversal == this.isReversal &&
           other.importedAt == this.importedAt);
 }
 
@@ -1435,6 +1463,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
   final Value<double> balance;
   final Value<String?> sourceFile;
   final Value<String?> category;
+  final Value<bool> isReversal;
   final Value<DateTime> importedAt;
   const BankTransactionsCompanion({
     this.id = const Value.absent(),
@@ -1445,6 +1474,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
     this.balance = const Value.absent(),
     this.sourceFile = const Value.absent(),
     this.category = const Value.absent(),
+    this.isReversal = const Value.absent(),
     this.importedAt = const Value.absent(),
   });
   BankTransactionsCompanion.insert({
@@ -1456,6 +1486,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
     this.balance = const Value.absent(),
     this.sourceFile = const Value.absent(),
     this.category = const Value.absent(),
+    this.isReversal = const Value.absent(),
     this.importedAt = const Value.absent(),
   })  : txnDate = Value(txnDate),
         description = Value(description);
@@ -1468,6 +1499,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
     Expression<double>? balance,
     Expression<String>? sourceFile,
     Expression<String>? category,
+    Expression<bool>? isReversal,
     Expression<DateTime>? importedAt,
   }) {
     return RawValuesInsertable({
@@ -1479,6 +1511,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
       if (balance != null) 'balance': balance,
       if (sourceFile != null) 'source_file': sourceFile,
       if (category != null) 'category': category,
+      if (isReversal != null) 'is_reversal': isReversal,
       if (importedAt != null) 'imported_at': importedAt,
     });
   }
@@ -1492,6 +1525,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
       Value<double>? balance,
       Value<String?>? sourceFile,
       Value<String?>? category,
+      Value<bool>? isReversal,
       Value<DateTime>? importedAt}) {
     return BankTransactionsCompanion(
       id: id ?? this.id,
@@ -1502,6 +1536,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
       balance: balance ?? this.balance,
       sourceFile: sourceFile ?? this.sourceFile,
       category: category ?? this.category,
+      isReversal: isReversal ?? this.isReversal,
       importedAt: importedAt ?? this.importedAt,
     );
   }
@@ -1533,6 +1568,9 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
     if (category.present) {
       map['category'] = Variable<String>(category.value);
     }
+    if (isReversal.present) {
+      map['is_reversal'] = Variable<bool>(isReversal.value);
+    }
     if (importedAt.present) {
       map['imported_at'] = Variable<DateTime>(importedAt.value);
     }
@@ -1550,6 +1588,7 @@ class BankTransactionsCompanion extends UpdateCompanion<BankTransaction> {
           ..write('balance: $balance, ')
           ..write('sourceFile: $sourceFile, ')
           ..write('category: $category, ')
+          ..write('isReversal: $isReversal, ')
           ..write('importedAt: $importedAt')
           ..write(')'))
         .toString();

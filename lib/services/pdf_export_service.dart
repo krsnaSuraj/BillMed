@@ -268,6 +268,8 @@ class PdfExportService {
     final net            = totalCredit - totalDebit;
     final gstApprox      = totalPurchase / 1.05 * 0.05;
     final closingBal     = allTxns.isNotEmpty ? allTxns.last.balance : 0.0;
+    final reversals      = allTxns.where((t) => t.isReversal).toList();
+    final reversalAmount = reversals.fold<double>(0, (s, t) => s + t.debit + t.credit);
 
     // Monthly bank breakdown
     final months = <String, Map<String, double>>{};
@@ -316,7 +318,7 @@ class PdfExportService {
             pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
           ],
         ),
-        build: (ctx) => _buildCaSections(cfg, allTxns, allBills, distMap, paidMap, totalPurchase, totalPaid, outstanding.toDouble(), totalDebit, totalCredit, net, gstApprox, closingBal, sortedMonths, fyLabel),
+        build: (ctx) => _buildCaSections(cfg, allTxns, allBills, distMap, paidMap, totalPurchase, totalPaid, outstanding.toDouble(), totalDebit, totalCredit, net, gstApprox, closingBal, sortedMonths, fyLabel, reversals, reversalAmount),
       ),
     );
 
@@ -351,7 +353,7 @@ class PdfExportService {
     double totalPurchase, double totalPaid, double outstanding,
     double totalDebit, double totalCredit, double net, double gstApprox,
     double closingBal, List<MapEntry<String, Map<String, double>>> sortedMonths,
-    String fyLabel,
+    String fyLabel, List<BankTransaction> reversals, double reversalAmount,
   ) {
     int sec = 0; final w = <pw.Widget>[];
     void a(String l, List<pw.Widget> ws) { sec++; w.add(_sectionHeader('$sec. $l')); w.addAll(ws); w.add(pw.SizedBox(height: 14)); }
@@ -385,6 +387,16 @@ class PdfExportService {
         _amtRow('Net Purchase (Base Value)', _money(totalPurchase - gstApprox), PdfColors.indigo700),
         pw.SizedBox(height: 4),
         pw.Text('* GST slabs vary.', style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
+      ]),
+    ]); }
+    if (cfg.inclReversalSummary) { a('Reversal / Return Transactions', reversals.isEmpty ? [
+      pw.Text('No reversal transactions for $fyLabel.', style: const pw.TextStyle(color: PdfColors.grey))
+    ] : [
+      _summaryBox(PdfColors.orange50, PdfColors.orange100, [
+        _amtRow('Total Reversal Transactions', '${reversals.length}', PdfColors.orange700),
+        _amtRow('Total Reversal Amount', _money(reversalAmount), PdfColors.orange700),
+        pw.SizedBox(height: 4),
+        pw.Text('* Reversals are returned/chq bounce/refund entries.', style: const pw.TextStyle(fontSize: 8, color: PdfColors.orange700)),
       ]),
     ]); }
     if (cfg.inclMonthlyBreakdown && sortedMonths.isNotEmpty) { a('Monthly Bank Breakdown ($fyLabel)', [

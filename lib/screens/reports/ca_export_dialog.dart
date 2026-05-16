@@ -12,6 +12,7 @@ class CaReportConfig {
   bool inclMonthlyBreakdown;
   bool inclSupplierTable;
   bool inclTransactionDetails;
+  bool inclReversalSummary;
 
   CaReportConfig({
     this.businessName = '',
@@ -23,6 +24,7 @@ class CaReportConfig {
     this.inclMonthlyBreakdown = true,
     this.inclSupplierTable = true,
     this.inclTransactionDetails = true,
+    this.inclReversalSummary = true,
   });
 }
 
@@ -154,6 +156,14 @@ class _CaExportDialogState extends State<CaExportDialog> {
                     subtitle: 'Month-wise credit / debit / net table',
                     value: _cfg.inclMonthlyBreakdown,
                     onChanged: (v) => setState(() => _cfg.inclMonthlyBreakdown = v),
+                  ),
+                  _toggle(
+                    icon: Icons.swap_vert,
+                    color: AppColors.warning,
+                    title: 'Reversal / Return Summary',
+                    subtitle: 'Count of reversed/returned transactions',
+                    value: _cfg.inclReversalSummary,
+                    onChanged: (v) => setState(() => _cfg.inclReversalSummary = v),
                   ),
                   _toggle(
                     icon: Icons.people,

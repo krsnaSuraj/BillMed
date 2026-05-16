@@ -5,8 +5,8 @@
 <p align="center">
   <img src="screenshots/Dashboard.jpeg" width="200" alt="Dashboard"/>
   <img src="screenshots/Bills.jpeg" width="200" alt="Bills"/>
-  <img src="screenshots/statement.jpeg" width="200" alt="Bank Import"/>
-  <img src="screenshots/Reports.jpeg" width="200" alt="Reports"/>
+  <img src="screenshots/statement.jpeg" width="200" alt="Bank Statement"/>
+  <img src="screenshots/Suppliers.jpeg" width="200" alt="Suppliers"/>
 </p>
 
 ---
@@ -43,13 +43,14 @@
 - **Universal PDF parser** — works with Canara, SBI, HDFC, ICICI, Axis, PNB, Kotak + all major Indian banks
 - **99.96% accuracy** — verified against 5,215 transactions over 5 years
 - **Dual parsing engine** — single-line (SBI/HDFC) and multi-line (Canara) formats
+- **Reversal Detection** — auto-detects returned/cheque bounce/refund entries with badge
 - **Balance verification** — golden rule check (opening + credits − debits = closing)
 - **Duplicate detection** — prevents re-importing the same transactions
 - **Batch insert** — handles 5,000+ transactions in a single SQL transaction
 - **Optional Gemini AI** — falls through to local parser silently on error
 
 ### CA-Ready Reports
-- **6 configurable sections** — toggle on/off via export dialog
+- **7 configurable sections** — toggle on/off via export dialog
   1. Purchase & Payables Summary
   2. Bank Cash Flow Statement
   3. GST Input Tax Estimate
@@ -78,19 +79,18 @@
   <img src="screenshots/Dashboard.jpeg" width="180" alt="Dashboard"/>
   <img src="screenshots/Bills.jpeg" width="180" alt="Bills List"/>
   <img src="screenshots/statement.jpeg" width="180" alt="Bank Statement"/>
-  <img src="screenshots/preview_transactions.jpeg" width="180" alt="Preview Transactions"/>
+  <img src="screenshots/Suppliers.jpeg" width="180" alt="Suppliers"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/Suppliers.jpeg" width="180" alt="Suppliers"/>
   <img src="screenshots/Reports.jpeg" width="180" alt="Reports"/>
   <img src="screenshots/Scan-Bill.jpeg" width="180" alt="Scan Bill"/>
   <img src="screenshots/settings-1.jpeg" width="180" alt="Settings"/>
+  <img src="screenshots/Settings-2.jpeg" width="180" alt="Settings 2"/>
 </p>
 
 <p align="center">
   <img src="screenshots/Add-supplier.jpeg" width="180" alt="Add Supplier"/>
-  <img src="screenshots/Settings-2.jpeg" width="180" alt="Settings 2"/>
 </p>
 
 ---
@@ -280,7 +280,8 @@ The CA Report PDF includes **6 configurable sections**:
 | 3 | **GST Estimate** | Approx. 5% input tax on purchases |
 | 4 | **Monthly Breakdown** | Month-wise credit/debit/net table |
 | 5 | **Supplier-wise** | Per-distributor: bill date, amount, paid, status |
-| 6 | **Transaction Ledger** | Full bank statement with running balance |
+| 6 | **Reversal/Return Summary** | Count and total of reversed/returned entries |
+| 7 | **Transaction Ledger** | Full bank statement with running balance |
 
 All sections are **toggleable** via the export dialog.  
 Business name, proprietor name, and GSTIN can be customized.
@@ -351,6 +352,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| **v2.7.0** | Reversal detection — auto-tags returned/chq bounce/refund entries with badge, filter, CA summary |
 | **v2.6.1** | Fresh APK build with all latest fixes |
 | **v2.6.0** | Auto-refresh dashboard, overpayment fix, icon fix, CA sections fix |
 | v2.5.x | Universal bank parser, zero mismatches, PDF extraction overhaul |

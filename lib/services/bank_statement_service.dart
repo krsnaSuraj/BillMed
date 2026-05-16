@@ -8,7 +8,8 @@ class ParsedTransaction {
   final double debit;
   final double credit;
   final double balance;
-  ParsedTransaction({required this.txnDate, required this.description, this.debit = 0, this.credit = 0, this.balance = 0});
+  final bool isReversal;
+  ParsedTransaction({required this.txnDate, required this.description, this.debit = 0, this.credit = 0, this.balance = 0, this.isReversal = false});
 }
 
 class BankStatementResult {
@@ -184,10 +185,13 @@ class BankStatementService {
 
       if (debit == 0 && credit == 0 && balance == 0) continue;
 
+      final isRev = _isReversal(desc, rowLower, credit);
+
       txns.add(ParsedTransaction(
         txnDate: date,
         description: desc.isEmpty ? (hasCr ? 'Credit' : 'Debit') : desc,
         debit: debit, credit: credit, balance: balance,
+        isReversal: isRev,
       ));
     }
 
@@ -254,7 +258,7 @@ class BankStatementService {
         } else {
           bal = amountsInLine[0];
         }
-        txns.add(ParsedTransaction(txnDate: date, description: descPart.isEmpty ? 'Transaction' : descPart, debit: db, credit: cr, balance: bal));
+        txns.add(ParsedTransaction(txnDate: date, description: descPart.isEmpty ? 'Transaction' : descPart, debit: db, credit: cr, balance: bal, isReversal: _isReversal(descPart, descPart, cr)));
         i++;
         continue;
       }
@@ -333,7 +337,7 @@ class BankStatementService {
         }
       }
 
-      txns.add(ParsedTransaction(txnDate: date, description: desc.isEmpty ? (isCredit ? 'Credit' : 'Debit') : desc, debit: db, credit: cr, balance: bal));
+      txns.add(ParsedTransaction(txnDate: date, description: desc.isEmpty ? (isCredit ? 'Credit' : 'Debit') : desc, debit: db, credit: cr, balance: bal, isReversal: _isReversal(desc, lower, cr)));
     }
 
     if (txns.isEmpty) return BankStatementResult(status: 'FAILED', message: 'No transactions found.', transactions: []);
@@ -393,13 +397,33 @@ class BankStatementService {
 
 
 
+  // ── Reversal detection ────────────────────────────────────────────────────
+  static bool _isReversal(String desc, String lower, double credit) {
+    if (lower.contains('chq return') || lower.contains('chq rtn') ||
+        lower.contains('chq ret') || lower.contains('cheque return') ||
+        lower.contains('cheque rtn')) {
+      // Cheque return is a DEBIT (cheque bounced), but tag it as reversal
+      return true;
+    }
+    // Generic reversal keywords (RETURN, REVERSAL, REFUND, REV, RTN)
+    // Must NOT match "value date" or similar header text
+    if (lower.contains('return') || lower.contains('reversal') ||
+        lower.contains('rev of') || lower.contains('ret of') ||
+        lower.contains('rtn of') || lower.contains('refund') ||
+        (lower.contains('rev ') && !lower.startsWith('value'))) {
+      return true;
+    }
+    return false;
+  }
+
   // ── Keyword helpers ────────────────────────────────────────────────────────
   static bool _hasDebitMarker(String l) =>
     l.contains(' dr') || l.contains('(dr)') || l.contains('/dr/') || l.contains('debit') ||
     l.contains('withdrawal') || l.contains('atm') || l.contains('oth-payment') ||
     l.contains('ib ift') || l.contains('ib neft dr') || l.contains('sc neft') ||
     l.contains('neft dr') || l.contains('imps dr') || l.contains('upi/dr') ||
-    l.contains('chq paid') || l.contains('ach dr') || l.contains('ecs dr') ||
+    l.contains('chq paid') || l.contains('chq return') || l.contains('chq rtn') ||
+    l.contains('chq ret') || l.contains('ach dr') || l.contains('ecs dr') ||
     l.contains('pos ') || l.contains('outward');
 
   static bool _hasCreditMarker(String l) =>

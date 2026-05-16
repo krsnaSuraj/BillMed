@@ -20,7 +20,7 @@ class BankViewScreen extends ConsumerStatefulWidget {
 class _BankViewScreenState extends ConsumerState<BankViewScreen> {
   final _searchCtrl = TextEditingController();
   String _query = '';
-  String _filter = 'All'; // All | Debit | Credit
+  String _filter = 'All'; // All | Debit | Credit | Reversal
 
   @override
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
@@ -69,6 +69,8 @@ class _BankViewScreenState extends ConsumerState<BankViewScreen> {
               _filterChip('Credit', AppColors.success),
               const SizedBox(width: 4),
               _filterChip('Debit', AppColors.danger),
+              const SizedBox(width: 4),
+              _filterChip('Reversal', AppColors.warning),
             ]),
           ),
           Expanded(
@@ -77,7 +79,7 @@ class _BankViewScreenState extends ConsumerState<BankViewScreen> {
                 // Apply filters
                 var filtered = txns.where((t) {
                   final matchSearch = _query.isEmpty || t.description.toLowerCase().contains(_query) || (t.category?.toLowerCase().contains(_query) ?? false);
-                  final matchFilter = _filter == 'All' || (_filter == 'Credit' && t.credit > 0) || (_filter == 'Debit' && t.debit > 0);
+                  final matchFilter = _filter == 'All' || (_filter == 'Credit' && t.credit > 0) || (_filter == 'Debit' && t.debit > 0) || (_filter == 'Reversal' && t.isReversal);
                   return matchSearch && matchFilter;
                 }).toList();
 
@@ -149,6 +151,17 @@ class _BankViewScreenState extends ConsumerState<BankViewScreen> {
                                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                                     maxLines: 2, overflow: TextOverflow.ellipsis,
                                   ),
+                                  if (t.isReversal)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.warning.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('↩ Reversal',
+                                        style: TextStyle(fontSize: 9, color: AppColors.warning, fontWeight: FontWeight.w600)),
+                                    ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '${_dayName(t.txnDate.weekday)}, ${t.txnDate.day} ${_monthName(t.txnDate.month)} ${t.txnDate.year}',

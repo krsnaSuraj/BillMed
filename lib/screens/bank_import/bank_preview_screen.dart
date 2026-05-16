@@ -149,11 +149,27 @@ class BankPreviewScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            t.description,
-                            style: const TextStyle(fontSize: 12),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                t.description,
+                                style: const TextStyle(fontSize: 12),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (t.isReversal)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('↩ Reversal',
+                                    style: TextStyle(fontSize: 9, color: AppColors.warning, fontWeight: FontWeight.w600)),
+                                ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -280,6 +296,7 @@ class BankPreviewScreen extends ConsumerWidget {
           credit: Value(t.credit),
           balance: Value(t.balance),
           sourceFile: Value(fileName),
+          isReversal: Value(t.isReversal),
         ));
       }
 

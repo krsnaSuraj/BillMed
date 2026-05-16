@@ -38,5 +38,6 @@ class BankTransactions extends Table {
   RealColumn get balance => real().withDefault(const Constant(0))();
   TextColumn get sourceFile => text().nullable()();
   TextColumn get category => text().nullable()();
+  BoolColumn get isReversal => boolean().withDefault(const Constant(false))();
   DateTimeColumn get importedAt => dateTime().withDefault(currentDateAndTime)();
 }
