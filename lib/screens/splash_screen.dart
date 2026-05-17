@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
+  Timer? _timer;
   late Animation<double> _logoFade, _logoScl, _logoPulse;
   late Animation<Offset> _tagSlide;
   late Animation<double> _tagFade, _linerFade;
@@ -43,14 +45,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _initAndGo() async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
-      NotificationService.init().then((_) => NotificationService.checkAndNotify(ref.read(databaseProvider)));
+      try {
+        NotificationService.init().then((_) => NotificationService.checkAndNotify(ref.read(databaseProvider)));
+      } catch (_) {}
     });
-    await Future.delayed(const Duration(milliseconds: 3600));
-    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const _MainShell()));
+    _timer = Timer(const Duration(milliseconds: 3600), () {
+      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const _MainShell()));
+    });
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

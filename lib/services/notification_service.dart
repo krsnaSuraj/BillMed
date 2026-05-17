@@ -5,19 +5,21 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
   static Future<void> init() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
-    await _plugin.initialize(const InitializationSettings(android: androidSettings, iOS: iosSettings));
+    try {
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const iosSettings = DarwinInitializationSettings();
+      await _plugin.initialize(const InitializationSettings(android: androidSettings, iOS: iosSettings));
 
-    // Create notification channel
-    const channel = AndroidNotificationChannel(
-      'overdue_bills',
-      'Overdue Bills',
-      description: 'Notifications for overdue bills',
-      importance: Importance.high,
-    );
-    await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+      // Create notification channel
+      const channel = AndroidNotificationChannel(
+        'overdue_bills',
+        'Overdue Bills',
+        description: 'Notifications for overdue bills',
+        importance: Importance.high,
+      );
+      await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+    } catch (_) {}
   }
 
   static Future<void> checkAndNotify(BillMedDatabase db) async {
