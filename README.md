@@ -352,6 +352,7 @@ BillMed/
 
 | Version | Key Changes |
 |---------|-------------|
+| **v2.7.1** | Test fix — notification error handling, timer leak fix in splash screen |
 | **v2.7.0** | Reversal detection — auto-tags returned/chq bounce/refund entries with badge, filter, CA summary |
 | **v2.6.1** | Fresh APK build with all latest fixes |
 | **v2.6.0** | Auto-refresh dashboard, overpayment fix, icon fix, CA sections fix |
