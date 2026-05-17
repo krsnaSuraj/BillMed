@@ -31,12 +31,11 @@ BillMed streamlines supplier payment management and financial reporting for medi
   <img src="screenshots/Dashboard.jpeg" width="180" alt="Dashboard"/>
   <img src="screenshots/Bills.jpeg" width="180" alt="Bills List"/>
   <img src="screenshots/statement.jpeg" width="180" alt="Bank Statement"/>
-  <img src="screenshots/preview_transactions.jpeg" width="180" alt="Preview Transactions"/>
   <img src="screenshots/Suppliers.jpeg" width="180" alt="Suppliers"/>
   <img src="screenshots/Reports.jpeg" width="180" alt="Reports"/>
   <img src="screenshots/Scan-Bill.jpeg" width="180" alt="Scan Bill"/>
-  <img src="screenshots/settings-1.jpeg" width="180" alt="Settings"/>
   <img src="screenshots/Add-supplier.jpeg" width="180" alt="Add Supplier"/>
+  <img src="screenshots/settings-1.jpeg" width="180" alt="Settings"/>
   <img src="screenshots/Settings-2.jpeg" width="180" alt="Settings 2"/>
 </div>
 
