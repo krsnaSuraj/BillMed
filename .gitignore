@@ -10,6 +10,8 @@ build/
 *.snap
 *.tags
 *.tags_sorted_by_file
+*.apk
+*.aab
 
 # Dart
 .dart_tool/
