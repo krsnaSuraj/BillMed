@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Only lightweight preferences are auto-backed up.
+         The ledger database and backup files are EXCLUDED on purpose:
+         use the in-app Backup & Restore flow instead. -->
+    <include domain="sharedpref" path="."/>
+</full-backup-content>

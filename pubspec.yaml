@@ -1,0 +1,38 @@
+name: billmed
+description: Distributor bill payment tracker for medical retail shops. Flutter offline app.
+publish_to: 'none'
+version: 0.1.0+5
+
+environment:
+  sdk: ^3.3.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  drift: ^2.21.0
+  sqlite3_flutter_libs: ^0.5.0
+  path_provider: ^2.1.0
+  path: ^1.9.0
+  intl: ^0.19.0
+  share_plus: ^10.0.0
+  file_picker: ^8.0.0
+  flutter_riverpod: ^2.5.0
+  http: ^1.0.0
+  package_info_plus: ^8.0.0
+  url_launcher: ^6.0.0
+  shared_preferences: ^2.3.0
+  pdf: ^3.11.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  drift_dev: ^2.21.0
+  build_runner: ^2.4.0
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon.png
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
