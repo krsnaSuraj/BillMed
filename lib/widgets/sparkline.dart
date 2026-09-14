@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -38,7 +39,7 @@ class _SparkPainter extends CustomPainter {
         values.map((v) => v / 100000.0).toList(growable: false);
     double minV = scaled.reduce((a, b) => a < b ? a : b);
     double maxV = scaled.reduce((a, b) => a > b ? a : b);
-    if (maxV <= 0) return;
+    // maxV > 0 is guaranteed by the caller (all-zero values render nothing).
     if (maxV == minV) {
       minV = maxV - 1;
     }
@@ -91,14 +92,6 @@ class _SparkPainter extends CustomPainter {
   bool shouldRepaint(covariant _SparkPainter oldDelegate) {
     return oldDelegate.color != color ||
         oldDelegate.values.length != values.length ||
-        !_equalValues(oldDelegate.values, values);
-  }
-
-  bool _equalValues(List<double> a, List<double> b) {
-    if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
+        !listEquals(oldDelegate.values, values);
   }
 }

@@ -87,10 +87,11 @@ void main() {
       '+5': 0, // explicit plus rejected
       '--5': 0,
       '5..5': 0,
-      ',,,': 0, // strips to empty → rejected
+      ',,,': 0, // commas are grouping only → malformed → rejected
       '₹100': 0, // currency symbols rejected
       r'$100': 0,
-      '1,2,3': 12300, // commas stripped blindly, then valid
+      '1,2,3': 0, // not a valid grouping: never read as ₹123
+      '12,50': 0, // a decimal comma is not ₹1,250
       '0.001': 0, // 3 decimals rejected (no rounding path reached)
       '0.005': 0, // same: regex allows max 2 decimals
       '999999999999': 0, // 12 digits > 11-digit cap → rejected
@@ -137,9 +138,12 @@ void main() {
       expect(s.balances.first.hasPending, isFalse);
     });
 
-    test('orphan bills count toward totals but yield no balance row', () {
-      // Actual behavior: totals sum ALL bills, balances only cover listed
-      // distributors. Documented here so a future fix is a conscious change.
+    test('orphan bills have no balance row and no headline impact', () {
+      // A bill whose supplier row is gone (impossible through the app: the
+      // cascade deletes them — reachable only in a hand-made/foreign file).
+      // The headline is the sum of the per-supplier dues, so an invisible bill
+      // cannot inflate the number at the top of the dashboard; it stays visible
+      // in the Bills tab, where it reads with a "?" supplier.
       final known = _dist(1, 'Known');
       final bills = [
         BillPaid(
@@ -148,9 +152,13 @@ void main() {
       final s = buildDashboardSummary([known], bills);
       expect(s.totalBills, 1);
       expect(s.totalBilledPaise, 50000);
-      expect(s.totalPendingPaise, 50000);
+      expect(s.totalPendingPaise, 0,
+          reason: 'the headline must equal the rows beneath it, and an orphan '
+              'bill has no row');
       expect(s.balances, hasLength(1));
       expect(s.balances.first.billedPaise, 0);
+      expect(s.balances.first.fullySettled, isTrue,
+          reason: 'the listed supplier really has nothing to pay');
     });
 
     test('pending nets overpayment within a supplier, clamped at zero', () {

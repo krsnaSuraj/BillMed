@@ -21,6 +21,20 @@ void main() {
       expect(computeBillStatus(10000, 10001), BillStatus.overpaid);
     });
 
+    test('a zero-amount bill is settled, whatever is paid on it', () {
+      // Reachable through legacy/imported rows (the v1–v3 migration rounds
+      // `amount * 100`). Calling it unpaid made it permanently "Due ₹0" and
+      // overdue forever.
+      expect(computeBillStatus(0, 0), BillStatus.paid);
+      expect(computeBillStatus(0, 500), BillStatus.paid);
+      expect(computeBillStatus(-100, 0), BillStatus.paid);
+      expect(computeBillStatus(0, 0).isSettled, isTrue);
+    });
+
+    test('a negative paid amount is treated as nothing paid', () {
+      expect(computeBillStatus(10000, -1), BillStatus.unpaid);
+    });
+
     test('labels are user-facing', () {
       expect(BillStatus.unpaid.label, 'Unpaid');
       expect(BillStatus.partial.label, 'Partial');

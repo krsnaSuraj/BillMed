@@ -203,13 +203,11 @@ void main() {
     await _expectMigratedToV4(path);
   });
 
-  test('indexed-v3 with pre-existing indexes migrates cleanly to v4',
-      () async {
+  test('indexed-v3 with pre-existing indexes migrates cleanly to v4', () async {
     // Regression: _createIndexes() used plain CREATE INDEX, so any on-device
     // DB that already carried the 4 indexes crashed mid-upgrade with
     // 'already exists'. Fixed with IF NOT EXISTS — this must reach v4.
-    final path =
-        await _buildLegacyFile(versionStamp: 3, withIndexes: true);
+    final path = await _buildLegacyFile(versionStamp: 3, withIndexes: true);
     addTearDown(() async {
       try {
         await Directory(File(path).parent.path).delete(recursive: true);

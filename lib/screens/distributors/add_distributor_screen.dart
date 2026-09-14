@@ -218,9 +218,14 @@ class _AddDistributorScreenState extends ConsumerState<AddDistributorScreen> {
                           autocorrect: false,
                           enableSuggestions: false,
                           validator: (v) {
-                            final digits =
-                                (v ?? '').replaceAll(RegExp(r'\D'), '');
-                            if (digits.isEmpty) return null;
+                            final raw = (v ?? '').trim();
+                            // Empty is fine (phone is optional). Anything the
+                            // user did type must be dialable: "abcdefghij"
+                            // used to strip to nothing and be saved as a phone,
+                            // then show up as the contact line everywhere.
+                            if (raw.isEmpty) return null;
+                            final digits = raw.replaceAll(RegExp(r'\D'), '');
+                            if (digits.isEmpty) return 'Enter valid phone';
                             return digits.length >= 10 && digits.length <= 15
                                 ? null
                                 : 'Enter valid phone';

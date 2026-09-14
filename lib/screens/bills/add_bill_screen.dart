@@ -348,7 +348,7 @@ class _AddBillScreenState extends ConsumerState<AddBillScreen> {
                         Expanded(
                           child: Text(
                             label,
-                            maxLines: 1,
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 16,
@@ -518,7 +518,7 @@ class _SupplierSheetState extends State<_SupplierSheet> {
                                     Expanded(
                                       child: Text(
                                         d.name,
-                                        maxLines: 1,
+                                        maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           fontSize: 15,

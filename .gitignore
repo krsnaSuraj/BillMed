@@ -45,6 +45,10 @@ ios/Runner.xcworkspace/
 .DS_Store
 Thumbs.db
 
+# Session logs
+*.log
+.dsh_*.log
+
 # Coverage
 coverage/
 

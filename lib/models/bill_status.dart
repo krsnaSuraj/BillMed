@@ -11,6 +11,10 @@ extension BillStatusX on BillStatus {
 }
 
 BillStatus computeBillStatus(int amountPaise, int paidPaise) {
+  // A zero-amount bill owes nothing, so it is settled. Reachable through
+  // legacy/imported rows (the v1–v3 migration rounds `amount * 100`), and
+  // treating it as unpaid made it permanently "Due ₹0 · Overdue".
+  if (amountPaise <= 0) return BillStatus.paid;
   if (paidPaise <= 0) return BillStatus.unpaid;
   if (paidPaise < amountPaise) return BillStatus.partial;
   if (paidPaise == amountPaise) return BillStatus.paid;

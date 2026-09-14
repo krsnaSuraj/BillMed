@@ -30,24 +30,25 @@ class BillMedDatabase extends _$BillMedDatabase {
             if (bankExists.isNotEmpty) {
               await m.deleteTable('bank_transactions');
             }
-            if (from >= 1) {
-              // ignore: experimental_member_use
-              await m.alterTable(TableMigration(
-                bills,
-                columnTransformer: {
-                  bills.amountPaise: const CustomExpression(
-                      'CAST(ROUND(amount * 100) AS INTEGER)'),
-                },
-              ));
-              // ignore: experimental_member_use
-              await m.alterTable(TableMigration(
-                payments,
-                columnTransformer: {
-                  payments.amountPaise: const CustomExpression(
-                      'CAST(ROUND(amount * 100) AS INTEGER)'),
-                },
-              ));
-            }
+            // drift only calls onUpgrade with from >= 1 (version 0 means a
+            // fresh file, which goes through onCreate), so a `from >= 1` guard
+            // here could never be false.
+            // ignore: experimental_member_use
+            await m.alterTable(TableMigration(
+              bills,
+              columnTransformer: {
+                bills.amountPaise: const CustomExpression(
+                    'CAST(ROUND(amount * 100) AS INTEGER)'),
+              },
+            ));
+            // ignore: experimental_member_use
+            await m.alterTable(TableMigration(
+              payments,
+              columnTransformer: {
+                payments.amountPaise: const CustomExpression(
+                    'CAST(ROUND(amount * 100) AS INTEGER)'),
+              },
+            ));
             await _createIndexes();
           }
         },
@@ -96,15 +97,22 @@ class BillMedDatabase extends _$BillMedDatabase {
       select(distributors).watch();
 
   /// Deletes a distributor and ALL their bills and payments atomically.
+  ///
+  /// `customUpdate` (not `customStatement`): the raw statements must declare
+  /// which tables they touch, or drift never notifies the watched queries and
+  /// the UI keeps showing the deleted supplier's bills until something else
+  /// happens to re-emit.
   Future<void> deleteDistributorCascade(int distributorId) {
     return transaction(() async {
-      await customStatement(
+      await customUpdate(
         'DELETE FROM payments WHERE bill_id IN (SELECT id FROM bills WHERE distributor_id = ?)',
-        [distributorId],
+        variables: [Variable.withInt(distributorId)],
+        updates: {payments, bills},
       );
-      await customStatement(
+      await customUpdate(
         'DELETE FROM bills WHERE distributor_id = ?',
-        [distributorId],
+        variables: [Variable.withInt(distributorId)],
+        updates: {bills},
       );
       await (delete(distributors)..where((d) => d.id.equals(distributorId)))
           .go();

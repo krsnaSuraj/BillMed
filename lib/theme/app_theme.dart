@@ -343,11 +343,11 @@ class AppMotion {
   static const Curve emphasized = Cubic(0.05, 0.7, 0.1, 1.0);
   static const Curve entrance = Curves.easeOutCubic;
 
-  /// Fade + slide-up entrance used for staggered list items.
+  /// Fade + slide-up entrance used for staggered list items (7 px of travel,
+  /// the stagger capped at index 8 so a long list never waits).
   static Widget fadeSlideIn({
     required Widget child,
     required int index,
-    Offset beginOffset = const Offset(0, 0.12),
   }) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -356,8 +356,7 @@ class AppMotion {
       builder: (context, value, _) => Opacity(
         opacity: value,
         child: Transform.translate(
-          offset: Offset(beginOffset.dx * (1 - value) * 60,
-              beginOffset.dy * (1 - value) * 60),
+          offset: Offset(0, 0.12 * (1 - value) * 60),
           child: child,
         ),
       ),

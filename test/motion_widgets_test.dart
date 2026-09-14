@@ -96,8 +96,7 @@ void main() {
                 scrollController: ctrl,
                 child: const Text('tilt child'),
               ),
-              for (var i = 0; i < 30; i++)
-                ListTile(title: Text('row $i')),
+              for (var i = 0; i < 30; i++) ListTile(title: Text('row $i')),
             ],
           ),
         ),

@@ -1,394 +1,650 @@
 # BillMed Architecture
 
-Offline-first ledger: Flutter UI → Riverpod streams → Drift (SQLite).
-One watched bills query is the source of truth; every derived number is a
-pure function of it. Verified against `lib/`, `pubspec.yaml`
-(`0.1.0+5`), `LICENSE` (MIT 2026 krsnaSuraj),
-`android/app/src/main/`, `assets/icon.png` (512×512), and `test/`
-(12 files, 95 tests).
+How the ledger is put together, what is guaranteed, and which test holds each
+guarantee in place. Verified against `lib/` (41 Dart files), `pubspec.yaml`
+(`0.1.1+7`), `android/`, and `test/`.
 
-Design principles:
+---
 
-- Streams, not invalidation — screens derive from watched queries.
-- Integer paise everywhere; one formatter for display.
-- Destructive actions confirm first and report failure honestly.
-- Backup files are plaintext SQLite; restore never touches live data
-  before a probe plus a safety copy succeed.
+## Table of contents
 
-## Startup
+- [Design principles](#design-principles)
+- [Invariants](#invariants)
+- [Layers and data flow](#layers-and-data-flow)
+- [Providers](#providers)
+- [Data layer](#data-layer)
+- [Money representation](#money-representation)
+- [Derived state](#derived-state)
+- [Screen contracts](#screen-contracts)
+- [Widgets, theme and motion](#widgets-theme-and-motion)
+- [Backup and restore](#backup-and-restore)
+- [Security posture](#security-posture)
+- [Failure modes](#failure-modes)
+- [Testing strategy](#testing-strategy)
+- [Module map](#module-map)
+- [Decisions and trade-offs](#decisions-and-trade-offs)
 
-`lib/main.dart` preloads the saved theme (`shared_preferences`,
-key `theme_mode`) **before** `runApp`, then injects it as a provider
-override so the first frame already uses the right mode. `BillMedApp`
-watches `themeModeProvider` and builds `MaterialApp` with
-`AppTheme.light` / `AppTheme.dark` over a `SplashScreen` home.
+---
+
+## Design principles
+
+1. **Streams, not invalidation.** Screens derive from watched queries. Nothing
+   is cached, so nothing can go stale, and no screen has to remember to refresh
+   anything else.
+2. **One number, one source.** Every figure on screen is a pure function of the
+   watched data — including the tiles, the headline total and the statement-like
+   rows that explain them.
+3. **Integer paise everywhere.** `double` exists only in the input parser and the
+   display formatter.
+4. **Derived, never stored.** Status, remaining, overdue and balances are
+   computed on read. The only stored facts are bills and payments.
+5. **Fail closed, and say so.** Destructive or irreversible paths (restore,
+   delete, overpay) verify first, confirm explicitly, and report failure honestly
+   instead of silently degrading.
+6. **Tests pin behaviour, not implementation.** Assertions name user-visible
+   guarantees (a number, a label, a row) rather than internal call patterns.
+
+---
+
+## Invariants
+
+These are the promises the app makes. Each one is enforced in code and pinned by
+at least one test; the test column names where.
+
+| # | Invariant | Where enforced | Pinned by |
+|---|---|---|---|
+| I1 | Every stored money value is an integer number of paise | `database/tables.dart`, `utils/money.dart` | `money_test`, `database_test` |
+| I2 | A comma is only ever digit grouping; anything else is invalid input | `utils/money.dart` `_isValidGrouping` | `money_test`, `edge_cases_test` |
+| I3 | Bill status is a pure function of `(amountPaise, paidPaise)`; a zero-amount bill is settled | `models/bill_status.dart` | `bill_status_test` |
+| I4 | Overdue = unsettled **and** strictly more than 30 days old | `models/bill_status.dart` | `bill_status_test`, `supplier_detail_test` |
+| I5 | `remainingPaise` never goes below zero | `database/database.dart` `BillPaid` | `bill_status_test`, `edge_cases_test` |
+| I6 | A bill with no payments still appears in the watched bill list | `LEFT JOIN` in `watchAllBillsWithPaid` | `database_test`, `widget_flows_test` |
+| I7 | Supplier dues net across that supplier's bills, then clamp at zero — never across suppliers | `summary_service.dart` | `summary_service_test` |
+| I8 | The dashboard headline equals the sum of the per-supplier dues rows | `summary_service.dart` | `summary_service_test`, `dashboard_money_test` |
+| I9 | A supplier is only `Clear` when every bill is settled **and** net dues are zero | `DistributorBalance.fullySettled` | `summary_service_test`, `supplier_detail_test` |
+| I10 | The `Paid` scope sums to the `Paid` tile; the `Pending` scope carries the clamped dues | `bill_view_service.dart` | `bill_view_service_test`, `supplier_detail_test` |
+| I11 | Bill numbers are unique per supplier, case-insensitively, and an edit excludes itself | `database.dart`, `add_bill_screen.dart` | `database_test`, `bill_ops_test` |
+| I12 | A payment can never be dated before its bill, and an existing one is never locked out of editing | `add_payment_screen.dart` | `payment_guards_test` |
+| I13 | Amounts above the outstanding balance are always confirmed first | `add_payment_screen.dart` | `payment_guards_test` |
+| I14 | Deleting a bill or supplier cascades to its payments in one transaction | `database.dart` | `database_test`, `bill_ops_test` |
+| I15 | Undo restores the exact row (amount, mode, reference, notes, date) | `bill_list_screen.dart`, `bill_detail_screen.dart` | `bill_ops_test` |
+| I16 | A file may replace the ledger only if it opens, matches its declared schema, and passes integrity + money bounds | `backup_service.dart` | `backup_probe_test` |
+| I17 | A backup is published only after it validates and matches the live row counts | `backup_service.dart` | `backup_probe_test` |
+| I18 | No safety copy ⇒ no restore | `backup_service.dart` | (reviewed; device-only path) |
+| I19 | A supplier name is never cut off: it wraps, then scrolls | `widgets/wrap_or_scroll_text.dart` | `long_name_test` |
+| I20 | Hidden tabs do not animate (battery) | `splash_screen.dart` `TickerMode` | (reviewed) |
+
+---
+
+## Layers and data flow
 
 ```mermaid
 flowchart TD
-    Main["main(): ensureInitialized"] --> Prefs["read theme_mode pref (default system)"]
-    Prefs --> Scope["ProviderScope + themeMode override"]
-    Scope --> App["BillMedApp (watches themeMode)"]
-    App --> Splash["SplashScreen: 900ms staged logo, 1050ms timer"]
-    Splash --> Shell["MainShell: 4-tab IndexedStack"]
-    Shell --> Obs["WidgetsBindingObserver: pause -> autoBackup"]
+    subgraph presentation["Presentation — lib/screens"]
+        A1["Dashboard"]
+        A2["Bills · Bill detail · Add/Edit bill"]
+        A3["Suppliers · Supplier detail · Add/Edit supplier"]
+        A4["Settings"]
+        A5["Splash + MainShell (4-tab IndexedStack)"]
+    end
+
+    subgraph state["State — lib/providers"]
+        B1["databaseProvider"]
+        B2["billsWithPaidProvider"]
+        B3["distributorListStreamProvider"]
+        B4["paymentsStreamProvider(billId)"]
+        B5["themeModeProvider"]
+    end
+
+    subgraph domain["Domain — lib/services · lib/models"]
+        C1["summary_service<br/>per-supplier netting"]
+        C2["bill_view_service<br/>scopes · counts · sort"]
+        C3["bill_status<br/>status · overdue"]
+        C4["money<br/>parse · format"]
+        C5["backup_service"]
+        C6["update_service"]
+    end
+
+    subgraph data["Data — lib/database"]
+        D1["BillMedDatabase (schema v4)"]
+        D2["watchAllBillsWithPaid()"]
+        D3["distributors / bills / payments"]
+    end
+
+    presentation --> state
+    state --> domain
+    state --> data
+    domain --> data
+    D2 --> D3
+    D1 --> D2
 ```
 
-Splash staging (`lib/screens/splash_screen.dart`): one 900 ms controller
-drives slip fade + slide (0–44 %), badge elastic scale (39–78 %), and
-wordmark fade (67–100 %), with a separate 1600 ms breathing pulse behind
-the logo. A 1050 ms timer then replaces the route with `MainShell` via
-`AppMotion.pageRoute`.
+The presentation layer never touches SQL and never computes money on its own; it
+renders what the pure services derive from the watched streams.
 
-`MainShell` keeps all four tabs alive in an `IndexedStack` (Dashboard,
-Bills, Suppliers, Settings) inside a custom pill bottom bar. Overdue
-deep-link: dashboard calls `_openOverdueBills`, which selects the Bills
-tab, sets the overdue flag, and bumps `_billsFilterEpoch`; the Bills
-screen is keyed `ValueKey('bills-epoch')` and constructed with
-`initialOverdueOnly`, so the deep-link always rebuilds fresh. Any manual
-tab tap clears a live overdue filter (bumping the epoch only when one
-was active) so the tab can never get stuck filtered. Backgrounding the
-app fires `BackupService.autoBackup` — fire-and-forget.
+---
 
-## Providers graph
-
-`lib/providers/database_provider.dart` plus
-`lib/providers/theme_provider.dart`:
-
-```mermaid
-flowchart TD
-    DB["databaseProvider: BillMedDatabase (closes on dispose)"] --> Bills["billsWithPaidProvider: Stream<List<BillPaid>>"]
-    DB --> Dist["distributorListStreamProvider: Stream<List<Distributor>>"]
-    DB --> Pay["paymentsStreamProvider(family billId): Stream<List<Payment>>"]
-    Bills --> ById["billByIdProvider(family billId): Future<BillPaid?>"]
-    Pay --> ById
-    DB --> ById
-    Theme["themeModeProvider: StateProvider<ThemeMode> + persistThemeMode"] --> App2["BillMedApp + Settings segmented control"]
-    Bills --> Dash["Dashboard"]
-    Bills --> List["Bill list"]
-    Bills --> SupD["Supplier detail"]
-    Dist --> Dash
-    Dist --> List
-    Dist --> SupD
-    Pay --> Detail["Bill detail payments section"]
-```
-
-Key contracts:
-
-- `watchAllBillsWithPaid` is a single `LEFT JOIN` aggregate
-  (`COALESCE(SUM(amount_paise),0)`) ordered by `bill_date DESC, id DESC`.
-  Every screen filters / sorts / sums from this stream — never its own
-  query plus manual refresh.
-- `billByIdProvider` watches both the payments stream and the bills
-  stream for its bill, so edits made elsewhere refresh detail without
-  pop / repush. It resolves through `getBillWithPaid`.
-- `watchPaymentsByBill` sorts ascending by payment date in Dart.
-- `themeModeProvider` is overridden at startup with the persisted value;
-  Settings writes through `persistThemeMode`.
-
-## Data flow
+## Providers
 
 ```mermaid
 flowchart LR
-    SQLite["SQLite billmed.db (WAL, FK ON)"] --> Watch["drift watched queries"]
-    Watch --> Prov["Riverpod stream providers"]
-    Prov --> Pure["pure derive: buildDashboardSummary, monthlyPurchasePaise, counts"]
-    Pure --> UI["screens: hero, rails, ledgers, chips"]
-    UI -->|writes| Mut["db methods: add/update/delete + cascade transactions"]
-    Mut --> SQLite
+    DB["databaseProvider\n(single drift instance,\nclosed on dispose)"]
+
+    DB --> BWP["billsWithPaidProvider\nStreamProvider.autoDispose\nStream&lt;List&lt;BillPaid&gt;&gt;"]
+    DB --> DLP["distributorListStreamProvider\nStreamProvider.autoDispose\nStream&lt;List&lt;Distributor&gt;&gt;"]
+    DB --> PSP["paymentsStreamProvider(id)\nStreamProvider.autoDispose.family\nStream&lt;List&lt;Payment&gt;&gt;"]
+    DB --> BIP["billByIdProvider(id)\nFutureProvider.autoDispose.family\nBillPaid?"]
+
+    BWP --> Screens["Dashboard · Bills · Supplier detail · Bill detail"]
+    DLP --> Screens
+    PSP --> BD["Bill detail timeline"]
+    BIP --> BD
 ```
 
-- Reads: cold start shows `SkeletonList`; half-loaded pairs are never
-  rendered (dashboard and suppliers wait for **both** streams); errors
-  surface an error card with Retry that invalidates the providers.
-- Writes: `addBill`, `updateBill`, `addPayment`, `updatePayment`,
-  `deletePayment`, plus two atomic cascades — `deleteBillCascade`
-  (payments then bill, one transaction) and `deleteDistributorCascade`
-  (payments via sub-select, then bills, then distributor, one
-  transaction). Undo re-inserts inside a transaction too.
-- Money math: `BillPaid.remainingPaise` clamps per bill;
-  `buildDashboardSummary` nets `amount - paid` across each supplier's
-  bills and clamps per supplier, then nets globally and clamps once.
-  The dashboard overdue rail (`SUM remaining where overdue`, computed
-  in the dashboard body) is always `<=` the all-bills header. Note the
-  honest edge: the Bills header sums per-bill clamped remainders while
-  the dashboard hero uses the globally netted total, so an overpaid
-  bill's credit shrinks the hero but not the Bills sum — both numbers
-  are shown where each definition is correct.
+Notes:
 
-## Schema and migrations
+- `billByIdProvider` watches both the payments stream and the bill list stream
+  before reading, so a bill detail page can never show a cached total.
+- `autoDispose` keeps memory flat while navigating; the database itself is owned
+  by `databaseProvider` and closed when the scope is disposed.
+- Screens call `ref.invalidate(...)` only for the explicit **Retry** affordance
+  shown when a stream reports an error.
 
-Drift schema version **4** (`lib/database/database.dart`,
-`lib/database/tables.dart`). Foreign keys enforced at open
-(`PRAGMA foreign_keys = ON`), journal mode WAL, synchronous NORMAL.
+---
+
+## Data layer
+
+### Schema (v4)
+
+```sql
+CREATE TABLE distributors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  company TEXT,
+  phone TEXT,
+  created_at INTEGER NOT NULL          -- seconds since epoch
+);
+
+CREATE TABLE bills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
+  bill_number TEXT NOT NULL,           -- unique per supplier, case-insensitive
+  bill_date INTEGER NOT NULL,
+  amount_paise INTEGER NOT NULL,       -- integer paise
+  notes TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bill_id INTEGER NOT NULL REFERENCES bills(id),
+  payment_date INTEGER NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  mode TEXT NOT NULL,                  -- Cash | UPI | Cheque | NEFT | RTGS
+  reference_no TEXT,
+  notes TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX idx_bills_distributor     ON bills (distributor_id);
+CREATE INDEX idx_bills_bill_date       ON bills (bill_date);
+CREATE INDEX idx_payments_bill         ON payments (bill_id);
+CREATE INDEX idx_payments_payment_date ON payments (payment_date);
+```
+
+Connection pragmas (`beforeOpen`): `foreign_keys = ON`, `journal_mode = WAL`,
+`synchronous = NORMAL`.
+
+### The aggregate query
+
+```sql
+SELECT b.id, b.distributor_id, b.bill_number, b.bill_date, b.amount_paise,
+       b.notes, b.created_at, COALESCE(p.total_paid, 0) AS paid_total
+FROM bills b
+LEFT JOIN (SELECT bill_id, SUM(amount_paise) AS total_paid
+           FROM payments GROUP BY bill_id) p
+  ON p.bill_id = b.id
+ORDER BY b.bill_date DESC, b.id DESC
+```
+
+`LEFT JOIN` + `COALESCE` are what make I6 hold: an unpaid bill is a row with
+`paid_total = 0`, not an absence. `readsFrom: {bills, payments}` is what makes
+the stream live — a write to either table re-emits the whole list.
+
+### Migrations
+
+```mermaid
+flowchart LR
+    V1["v1 · bills/payments\namount REAL (rupees)\n+ bank_transactions"] --> V4
+    V2["v2 · as v1"] --> V4
+    V3["v3 · as v1 + indexes"] --> V4
+    V4["v4 · amount_paise INTEGER\nbank_transactions dropped\nindexes ensured"]
+```
+
+`onUpgrade` runs only for `from < 4` (drift calls `onCreate` for a fresh file):
+
+1. drop `bank_transactions` if it exists,
+2. `alterTable(TableMigration(...))` on `bills` and `payments` with
+   `amount_paise = CAST(ROUND(amount * 100) AS INTEGER)`,
+3. create the four indexes idempotently (`CREATE INDEX IF NOT EXISTS`), so a
+   real v1–v3 file that already carries them does not abort the upgrade.
+
+Because the migration's `INSERT … SELECT` names **every** v4 column, a file that
+claims an older version but lacks one of those columns fails the migration on
+every later open. That is exactly the failure mode the restore gate now prevents
+by validating the full column set before a file may replace the ledger
+(see [Backup and restore](#backup-and-restore)).
+
+---
+
+## Money representation
+
+| Concern | Rule | Code |
+|---|---|---|
+| Storage | `INTEGER` paise | `tables.dart` |
+| Parsing | `^(\d{1,11})(\.\d{1,2})?$` after validating grouping | `money.dart` |
+| Grouping | Indian `12,34,567` and Western `1,234,567`; last group of 3, middle groups of 2 or 3 | `money.dart` `_isValidGrouping` |
+| Invalid input | returns `0`, and `isValidRupeesInput` makes the form show `Enter a valid amount` | `money.dart` |
+| Rounding | `(value * 100).round()` — 2-decimal inputs are exact in binary64 for the supported range | `money.dart` |
+| Upper bound | 11 digits (₹99,99,99,99,999 ≈ 10¹³ paise) per row | `money.dart` |
+| Display | `NumberFormat.currency(locale: 'en_IN', symbol: ₹)`, decimals only when paise ≠ 0 | `money.dart` |
+| Editing | `paiseToEditableString` (the exact inverse of the parser) | `money.dart` |
+
+Restore adds a second fence: a file whose rows exceed ₹100 crore (or are
+negative) is refused, because such rows cannot come from this app and a column
+full of them would overflow SQLite's `SUM()`.
+
+---
+
+## Derived state
 
 ```text
-distributors
-  id INTEGER PK AI | name TEXT | company TEXT? | phone TEXT? | created_at
-bills
-  id INTEGER PK AI | distributor_id FK -> distributors.id
-  bill_number TEXT | bill_date | amount_paise INTEGER | notes TEXT? | created_at
-  INDEX idx_bills_distributor (distributor_id)
-  INDEX idx_bills_bill_date (bill_date)
-payments
-  id INTEGER PK AI | bill_id FK -> bills.id
-  payment_date | amount_paise INTEGER | mode TEXT
-  reference_no TEXT? | notes TEXT? | created_at
-  INDEX idx_payments_bill (bill_id)
-  INDEX idx_payments_payment_date (payment_date)
+computeBillStatus(amount, paid):
+    amount <= 0        → Paid          (zero-amount rows settle)
+    paid   <= 0        → Unpaid
+    paid   <  amount   → Partial
+    paid   == amount   → Paid
+    paid   >  amount   → Overpaid
+
+remainingPaise = max(amount − paid, 0)
+
+isBillOverdue(billDate, amount, paid, now):
+    days(billDate → today) > 30  AND  status(bill) is not settled
+
+DistributorBalance:
+    billed   = Σ amount                over that supplier's bills
+    paid     = Σ paid
+    rawNet   = Σ (amount − paid)
+    pending  = max(rawNet, 0)          ← netted per supplier, then clamped
+    settledCount  = count(status ∈ {Paid, Overpaid})
+    unsettledCount = billCount − settledCount
+    fullySettled   = pending == 0 AND unsettledCount == 0
+
+DashboardSummary:
+    totalPending = Σ balances.pending  ← identical to the rows on screen
 ```
 
-- Table-level `@TableIndex` annotations declare the four indexes;
-  `_createIndexes` additionally issues `CREATE INDEX IF NOT EXISTS` so
-  the v4 upgrade is idempotent on real v1/v2/v3 databases that already
-  carry them.
-- `onUpgrade` from below v4: drops legacy `bank_transactions` when
-  present, then migrates rupee-real columns to integer paise with
-  `CAST(ROUND(amount * 100) AS INTEGER)` on both `bills` and
-  `payments`, then creates indexes. Fresh installs use `createAll`.
-- Uniqueness of bill numbers is per supplier and case-insensitive
-  (`billNumberExistsForDistributor`, optional `excludeBillId` for edits),
-  enforced in the form layer plus the delete-Undo rename path — not a
-  DB unique index.
-- Delete cascades are **application transactions**, not
-  `ON DELETE CASCADE`: payments are removed before their parent rows
-  inside `db.transaction`.
+`fullySettled` exists because netting creates a counter-intuitive state: one
+supplier can hold enough advance on one bill to cancel the dues on another, and
+the net is zero while a bill is still unpaid. Showing `Clear` there would be a
+lie, so the tile and the row fall back to the (possibly ₹0) net amount and the
+`Pending (n)` chip stays non-zero.
 
-## Backup and restore state machine
+Supplier bill scopes (`bill_view_service.dart`) are the third view of the same
+data:
 
-`lib/services/backup_service.dart`. A static `_busy` flag serializes all
-runs. Timestamps carry milliseconds (`yyyyMMdd_HHmmssSSS`) so repeats
-within one second never collide.
+| Scope | Matches | Meaning |
+|---|---|---|
+| `all` | everything | the Billed tile |
+| `pending` | `!status.isSettled` | the Pending tile |
+| `paid` | `paidPaise > 0` | the bills whose `Paid` lines sum to the Paid tile |
+| `overdue` | `isOverdue` | the overdue slice of `pending` |
+
+Counts are always computed on the **full** list, so a chip keeps telling the
+truth while a filter is active.
+
+---
+
+## Screen contracts
+
+### Splash and shell
+
+Staged logo animation, then `MainShell`: a four-tab `IndexedStack` where each tab
+is wrapped in `TickerMode(enabled: i == _currentIndex)` so a hidden tab cannot
+keep animating. Lifecycle `paused` fires the silent auto-backup.
+
+### Dashboard
+
+Headline pending total, last-6-months purchase hero with a draw-in sparkline
+(one clock read feeds both the bars and the month labels), overdue rail that
+sums the **clamped** remaining of overdue bills and deep-links into the Bills tab
+with the overdue chip pre-selected, total-paid row, and the per-supplier dues
+ledger. Each row: colour rail (danger / warning / success by state), name (wraps,
+then scrolls), company or phone, `n bills · n overdue`, and the dues amount or
+`Clear`. A row is only `Clear` when `fullySettled`.
+
+### Bills
+
+No app bar; a live subtitle (`N bills · ₹X pending`), 250 ms debounced search on
+bill number or supplier, five chips with counts scoped to the search + supplier
+subset, supplier pill, sort pill (newest / oldest / amount), Reset pill, month
+group headers for date orders and a flat list for amount order. Swipe-to-delete
+captures payments first (aborting if unreadable), confirms with the count,
+re-captures after the confirm, deletes, and offers Undo that re-inserts bill +
+payments in one transaction with original ids (renaming to `<number> (restored)`
+on a clash). A supplier filter pointing at a deleted supplier is dropped
+automatically instead of leaving a silently empty list.
+
+### Bill detail
+
+Collapsing status-tinted header (bill number, hero amount, `StatusChip`, one-line
+`Paid ₹X · Due ₹Y`, Advance line, overdue strip), meta rows, payment timeline with
+per-payment edit / delete + Undo, and a Record Payment FAB while unsettled.
+Ghost card when the bill disappeared elsewhere.
+
+### Add / edit bill
+
+Supplier picker sheet, per-supplier duplicate-number guard (case-insensitive,
+self excluded when editing), bill date clamped to today, paise-safe amount field,
+dirty tracking with a discard confirm, and a save-in-flight back guard.
+
+### Add / edit payment
+
+Five mode chips with per-mode reference hints, outstanding strip, **Pay Full**
+chip, date guard (create only), shared overpay guard for create and edit, and the
+same dirty + save-in-flight protocol.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Idle
-    Idle --> Exporting: Backup Now
-    Idle --> AutoSnap: app pause
-    Idle --> Probing: restore picked file
-    Exporting --> Idle: renamed + shared (cancel = ok)
-    Exporting --> Idle: failed (null)
-    AutoSnap --> Idle: renamed (silent)
-    Probing --> Rejected: header / 100MB / version / tables / columns / triggers-views / integrity fail
-    Probing --> SafetyCopy: probe passed
-    SafetyCopy --> Aborted: safetyFailed (live DB untouched)
-    SafetyCopy --> Replacing: safety ok, DB closed, sidecars cleared
-    Replacing --> RestartNeeded: successRequiresRestart
-    Replacing --> RestartNeededFail: WAL locked or copy failed (safety restored)
-    Rejected --> Idle
-    Aborted --> Idle
-    RestartNeeded --> [*]
-    RestartNeededFail --> [*]
+    [*] --> Empty
+    Empty --> Partial: user types
+    Partial --> Full: typed value == outstanding OR Pay Full tapped
+    Full --> Partial: value edited away from outstanding
+    Full --> Empty: Pay Full tapped again (fill taken back)
+    Empty --> Full: outstanding is 0? → chip hidden instead
+    note right of Full
+        Chip shows a tick + "Full amount".
+        Any other state: a bolt + "Pay Full".
+        Nothing is ever pre-ticked.
+    end note
 ```
 
-- Export: `VACUUM INTO` a hidden `.tmp.db` (WAL checkpoint + file copy
-  fallback), size sanity (`>= 100` bytes), atomic rename to
-  `BillMed_backup_<ts>.db`, then `share_plus`. Busy returns null.
-- Auto: same dance into the single `BillMed_auto_backup.db` slot.
-- Import probe runs on a **private temp copy** via `_ProbeDatabase`
-  (`schemaVersion 4`, migrations disabled): rejects over-100 MB files,
-  non-`SQLite format 3` headers, `user_version` outside 1–4, missing
-  `distributors` / `bills` / `payments`, wrong money column per version
-  (`amount` pre-v4 vs `amount_paise` on v4), any trigger / view, and
-  non-`ok` `integrity_check`. Extra tables stay allowed (legacy files
-  may carry `bank_transactions`; the migrator drops it on reopen).
-- Replace: safety copy (`BillMed_pre_restore_<ts>.db`, same-ms safe),
-  `db.close()`, delete `-wal` / `-shm` / `-journal` sidecars — an
-  undeletable sidecar fails closed (safety copy restored,
-  `failedRestartRequired`). Copy over the live path, then the app must
-  restart: `PopScope(canPop: false)` dialog with Close App Now
-  (`SystemNavigator.pop`; on iOS a swipe-away hint instead, since the
-  call is a no-op there).
-- Settings mirrors every outcome: confirm sheet before picking, invalid
-  / busy / `safetyFailed` snacks, silent cancel, plus the My Backups
-  tile (manual files preferred over auto; header + size re-validated
-  before every reshare).
+### Suppliers
 
-## PDF and update sequences
+Ledger with phone-digit search (non-digits stripped on both sides) and a
+filtered dues header (`N of M suppliers · ₹X dues`, so a filtered count is never
+paired with the global total). Detail: collapsing header with the live
+distributor row, `FittedBox`-scaled pending amount, tap-to-call, the three tiles
+(which are also the filters), scope chips with counts, and the bill ledger where
+each row reads `#number` + status chip, `date · Billed ₹X`, `Paid ₹Y · Due ₹Z`
+(`· Advance ₹V` when overpaid, `· Overdue` past 30 days). A filtered-to-nothing
+ledger names its own scope and offers `Show all bills`.
 
-Supplier statements (`lib/services/pdf_export_service.dart`): Roboto
-assets when bundled (real `₹`), Helvetica fallback with `Rs.` swap
-otherwise. `_money` delegates to `formatPaise` so screen and PDF can
-never disagree. Rows sort ascending by date; each row shows
-Amount / Paid / Balance (`remainingPaise`); the TOTAL row sums the three
-columns, so row TOTAL consistency holds by construction. Files land in
-the system temp dir as `Statement_<sanitized>_<yyyyMMdd_HHmm>ms.pdf`
-and are deleted after the share sheet resolves (cancel still returns
-true — the PDF itself was fine). The detail-screen Share button is
-disabled for empty bill lists (`_sharing` guards double tap).
+### Settings
+
+Theme (Light / Dark / System, persisted), transfer guide, Backup Now (with the
+plaintext warning on the tile itself), My Backups (manual → before-restore →
+auto, re-shared only after passing the same validation the restore uses), Restore
+(confirm, then the state machine below), and the manual update check.
+
+---
+
+## Widgets, theme and motion
+
+| Widget | Contract |
+|---|---|
+| `MeshHeader` | Aurora blobs painted behind each screen; bottom edge melts via a `ShaderMask` |
+| `GlassBar` | Frost strip under collapsing bars |
+| `DrawSparkline` / `MiniSparkline` | 900 ms draw-in; replays when values change |
+| `TiltOnScroll` | Scroll-linked perspective tilt on the dashboard hero |
+| `PressScale` | 1.0 → 0.97 press feedback, accessibility label, optional divider, staggered entrance |
+| `AnimatedMoney` | 400 ms integer tween through `formatPaise`; a single tick listener for the widget's whole life |
+| `StatusChip` | Danger / warning / success / info pill, `onGradient` variant for headers |
+| `WrapOrScrollText` | Fits → wraps; does not fit → scrolls its own line; animations disabled → static. No `LayoutBuilder` (it cannot answer intrinsic queries inside `IntrinsicHeight`) |
+| `showActionSheet` / `confirmSheet` / `showAppSnack` | Bottom menus, danger confirms and queued floating snacks with Undo |
+
+Tokens (`theme/app_theme.dart`): brand indigo `#1A237E` → teal `#00BFA5`;
+radius 12 / 16 / 20 / 28 / pill; motion 150 / 250 / 300 ms with a 60 ms stagger;
+one haptic vocabulary (select / confirm / destroy).
+
+Two layout rules are load-bearing and easy to break:
+
+1. A stretched `Row` inside a sliver box demands an infinite height — the tiles
+   strip is wrapped in `IntrinsicHeight` so the row gets a finite height first.
+   Without it, the tiles painted while everything below them (the whole bill
+   ledger) was pushed out of the paint extent.
+2. `IntrinsicHeight` asks its children for intrinsic dimensions, so nothing
+   inside such a row may be a `LayoutBuilder`. `WrapOrScrollText` measures after
+   layout through its render objects instead.
+
+---
+
+## Backup and restore
+
+### Export (manual)
 
 ```mermaid
-sequenceDiagram
-    participant UI as Supplier detail
-    participant PDF as PdfExportService
-    participant OS as Share sheet
-    UI->>PDF: shareSupplierStatement(distributor, items)
-    PDF->>PDF: sort by date, sum Amount/Paid/Balance
-    PDF->>PDF: write temp Statement PDF (ms filename)
-    PDF->>OS: shareXFiles + delete temp file
-    OS-->>UI: cancelled or shared (both ok)
+stateDiagram-v2
+    [*] --> Busy: Backup Now
+    Busy --> Snapshot: VACUUM INTO tmp
+    Snapshot --> Verify: validate + row counts
+    Verify --> Published: rename to BillMed_backup_<ts>.db
+    Verify --> Failed: mismatch → discard tmp
+    Busy --> Fallback: VACUUM INTO failed
+    Fallback --> Checkpoint: PRAGMA wal_checkpoint(TRUNCATE)
+    Checkpoint --> Verify: ok
+    Checkpoint --> Failed: checkpoint failed (never publish a stale copy)
+    Published --> Share: system share sheet (dismissal is not a failure)
+    Share --> [*]
+    Failed --> [*]
 ```
 
-Update checks (`lib/services/update_service.dart`) are **manual only** —
-no polling, no background fetch. Settings calls `manualCheck`, which
-hits the GitHub latest-release API over HTTPS with a 10 s timeout,
-strips a leading `v`, compares semver cores then build numbers, and:
+Auto-backup (on app pause) follows the same path into
+`BillMed_auto_backup.db`, silently and best-effort.
+
+### Restore
 
 ```mermaid
-sequenceDiagram
-    participant UI as Settings
-    participant GH as GitHub releases API
-    participant BR as External browser
-    UI->>GH: GET latest release (10s timeout)
-    GH-->>UI: tag + assets
-    alt up to date
-        UI->>UI: green 'latest version' snack
-    else newer tag, no .apk asset
-        UI->>UI: amber 'no installable file yet' snack
-    else newer tag with .apk
-        UI->>UI: Update dialog -> BR (externalApplication, platformDefault fallback)
-    end
+stateDiagram-v2
+    [*] --> Confirm
+    Confirm --> Cancelled: user backs out
+    Confirm --> Pick: continue
+    Pick --> Probe: file chosen
+    Probe --> Invalid: fails any gate
+    Probe --> SafetyCopy: opens, matches declared schema
+    SafetyCopy --> SafetyFailed: cannot snapshot live ledger
+    SafetyCopy --> Swap: safety copy written
+    Swap --> RestartRequired: copy over billmed.db
+    Swap --> RestoreFailed: copy failed → restore safety copy
+    RestartRequired --> [*]
+    SafetyFailed --> [*]
+    RestoreFailed --> [*]
+    Invalid --> [*]
+    Cancelled --> [*]
 ```
 
-Offline or malformed responses show the red connectivity snack. The
-dialog deep-links the releases page in an external browser; the app
-never downloads or installs anything itself.
+### The validation gate
 
-## Bills UI contract
+`BackupService.validateBackupFile(path)` is the single entry point; restore and
+the My Backups re-share both go through it. In order:
 
-Bill list (`lib/screens/bills/bill_list_screen.dart`) — no `AppBar`; a
-full-cover `MeshHeader` sits behind a live subtitle that reads
-`Loading bills…` on cold start (never a fake `0 bills` flash), then
-`N bills · ₹X pending` summed over all bills. Search (bill number or
-supplier, 250 ms debounce, instant clear) feeds 5 chips — All, Unpaid,
-Partial, Paid, Overdue — whose counts are scoped to the
-search + supplier subset. The supplier pill filters via action sheet;
-the sort pill offers Newest / Oldest / Amount high-to-low; a Reset pill
-appears only when supplier or sort diverge and restores everything.
-Date orders render month-group headers; amount order is a flat global
-list with newest-id tiebreak. Each row: supplier `·` date line, amount
-in danger red while owed (calm text once settled, red dot when
-overdue), `StatusChip`, plus a `Due ₹X` line on partial rows and an
-`Advance ₹X` line on overpaid rows. Swipe-to-delete captures payments
-first (abort + snack when unreadable), confirms with the payment count,
-re-captures after confirm (a payment added under the sheet dies in the
-cascade too), deletes, and offers Undo that re-inserts bill + payments
-in one transaction with original ids preserved — renaming to
-`<number> (restored)` on a number clash and a failure snack when restore
-is impossible. Stream errors show an error card with Retry.
+| Gate | Rejects |
+|---|---|
+| size | `< 100 B` (torn/empty) or `> 100 MB` |
+| header | anything whose first 15 bytes are not `SQLite format 3` |
+| `user_version` | anything outside 1–4 |
+| tables | a file missing `distributors`, `bills` or `payments` |
+| columns | a file whose declared version cannot supply **every** column the app reads (v4: `amount_paise`; v1–v3: legacy `amount`) — this is the gate that prevents a crafted legacy file from bricking the next launch |
+| foreign objects | any `trigger` or `view` (BillMed creates none) |
+| money bounds | negative values, or values beyond ₹100 crore per row |
+| integrity | `PRAGMA integrity_check != 'ok'` |
 
-Bill detail (`lib/screens/bills/bill_detail_screen.dart`) — `SliverAppBar`
-(expanded 200, pinned) over a status-tinted gradient with sheen and
-frost strip: bill number, hero amount (shared `billamt-<id>` tag with
-the list), `StatusChip` in `onGradient` frost mode, one-line
-`Paid ₹X · Due ₹Y`, an Advance line when overpaid, and an overdue strip
-quoting the 30-day rule. Body: meta rows (number, date, supplier,
-notes), payments section with skeleton while uncached and error card +
-Retry on failure, vertical timeline rows (mode icon disc + connector,
-amount, date `·` reference, mode pill, per-payment edit / delete menu),
-`Settled` pill for settled bills, and a Record Payment FAB only while
-unsettled. A bill deleted elsewhere renders a ghost card
-(`This bill no longer exists.`); payment delete offers Undo that
-re-inserts the payment and says so when it cannot.
+Restore then:
 
-Add / edit bill (`lib/screens/bills/add_bill_screen.dart`) — supplier
-via searchable bottom sheet (empty-store guidance included), duplicate
-bill-number guard per supplier (edit excludes self), bill-date picker
-clamped to today (future dates impossible; post-today initials snap
-back), paise-safe amount field, dirty tracking with discard confirm,
-and a save-in-flight back guard: `PopScope` swallows back presses while
-saving instead of stacking a discard sheet that would double-pop.
+1. copies the picked file into a private cache probe (never opens the user's file
+   in place — that would create `-wal`/`-shm` sidecars next to it),
+2. validates the probe,
+3. writes the safety copy (`VACUUM INTO`, or a checkpoint + byte copy), failing
+   the whole restore if it cannot,
+4. closes the database, sweeps `-wal`/`-shm`/`-journal` (a surviving sidecar
+   would replay stale pages into the restored file), and copies the candidate
+   over `billmed.db`,
+5. reports `successRequiresRestart` so the user restarts the app.
 
-Add / edit payment (`lib/screens/payments/add_payment_screen.dart`) —
-five `PaymentMode` chips (Cash, UPI, Cheque, NEFT, RTGS) with per-mode
-reference hints (UTR for NEFT/RTGS), outstanding strip, Pay Full chip
-(create flow with positive balance), payment-date clamped to today and
-rejected before the bill date, and one shared overpay guard for create
-**and** edit: any amount above outstanding names the excess
-(`Amount exceeds outstanding by ₹X. Record anyway?`) behind a danger
-confirm. Same dirty + save-in-flight back-guard protocol as the bill
-form.
+Result mapping: `successRequiresRestart`, `failedRestartRequired` (sidecar or
+copy failure, safety copy restored), `safetyFailed`, `cancelled`, `busy`,
+`invalid`.
 
-Suppliers (`lib/screens/distributors/`) — list ledger with phone-digit
-search (non-digits stripped both sides) and a filtered dues header
-(`N of M suppliers · ₹X dues` while searching, so a filtered count is
-never paired with the global total). Detail is a 230 px sliver with
-live distributor row (edits elsewhere reflect without repush), ghost
-card when deleted elsewhere (`This supplier no longer exists.`),
-`FittedBox`-scaled pending amount, `company · phone · tap to call`
-line, Billed / Paid / Pending glass tiles, share wiring with
-empty-list guard, and date-DESC + id-DESC ledger rows with live
-`Paid X of Y` + overdue suffix lines. Dialing normalizes: 10 digits →
-`+91`, leading-`0` 11 digits → `+91` rest, longer digit strings → `+`
-prefix, all via a `tel:` intent.
+---
 
-Settings (`lib/screens/settings/settings_screen.dart`) — theme
-`SegmentedButton` (Light / Dark / System, persisted), transfer guide
-dialog (6 steps, explicit NOT-encrypted file warning, Backup Now
-shortcut), Backup Now tile with busy label, My Backups tile with newest
-label + validated reshare, restore tile with confirm + restart dialogs
-(iOS swipe hint, busy / `safetyFailed` snacks), update-check tile
-(spinner while checking), and a brand profile hero with version pill
-(`PackageInfo` `version+build`).
+## Security posture
 
-## Theme, motion, and widget contracts
+Threat model: a single-user offline app on a phone the owner controls. The
+realistic risks are (a) a hostile file offered to the restore flow, (b) a lost
+device with plaintext backups, and (c) leaked signing material.
 
-`lib/theme/app_theme.dart` — indigo `0xFF1A237E` / teal `0xFF00BFA5`
-brand; `AppGradients.brand` (indigo → teal, stops 0 / 0.52 / 1) plus
-sheen and success / danger / warning soft gradients; `AppRadius`
-12 / 16 / 20 / 28 / pill; light `#F0F2F8` and dark `#0D0D1A`
-backgrounds with brightness-aware text / subtitle / card helpers;
-`AppShadow.hero` (light-only glow) and dark-mode card borders;
-`AppHaptics` vocabulary (select / confirm / destroy).
+Verified controls:
 
-`AppMotion` — `fast` 150 ms, `medium` 250 ms, `page` 300 ms,
-`staggerStep` 60 ms; `entrance` easeOutCubic and `emphasized`
-cubic(0.05, 0.7, 0.1, 1.0); `pageRoute` fade + slight slide;
-`fadeSlideIn` stagger capped at index 8.
+- **All SQL is parameterised.** Every raw statement is either a constant or bound
+  with `?`/`Variable`; no query is built from user input. Table names used in
+  `PRAGMA table_info(<table>)` come from compile-time constant maps.
+- **Restore cannot execute code or escape the sandbox.** The candidate is read
+  only, the destination is fixed, and the probe rejects triggers/views, so no
+  logic can ride into the live database.
+- **`tel:` is injection-safe.** Every non-digit is stripped before the URI is
+  built, so `*`, `#`, `,` or `;` cannot reach the dialer.
+- **Update check is contained.** The version tag must match a strict
+  version-shaped pattern (≤ 24 chars) before it is rendered, the response is
+  size-capped before decoding, the launch URL is a hardcoded constant, and any
+  malformed response fails closed.
+- **Network is one HTTPS call.** `INTERNET` is the only permission;
+  `usesCleartextTraffic="false"`.
+- **The ledger is excluded from cloud backup and device transfer** by
+  `allowBackup="false"` plus sharedpref-only allowlists in `dataExtractionRules`
+  and `fullBackupContent`.
+- **The release APK is release-signed** (verified with `apksigner`), never the
+  debug fallback in `build.gradle`.
 
-| Widget (`lib/widgets/`) | Contract |
-| ----------------------- | -------- |
-| `MeshHeader` | Aurora blobs; bottom edge melts via `ShaderMask` dstIn (stops 0 / 0.62 / 1). Heights: dashboard 300, bills 260, suppliers 230, detail 230, forms 180–200. |
-| `GlassBar` | Frost strip (`BackdropFilter` blur 18, theme tint) under collapsing bars. |
-| `DrawSparkline` | 900 ms left-to-right draw-in + fade over `MiniSparkline`; replays on value change; fade-only when width is unbounded; hides for < 2 points or all-zero. |
-| `TiltOnScroll` | Scroll-offset perspective tilt (max 0.04) wrapping the dashboard hero. |
-| `PressScale` | 1.0 → 0.97 over 120 ms; accessibility label; optional divider under row; `index` adds the staggered entrance. |
-| `showActionSheet` / `confirmSheet` | Bottom menus / danger confirms; single-open guards; scrollable content. |
-| `showAppSnack` | Queued floating snacks: green 4 s success, red 6 s failure, optional action (Undo). |
-| `AnimatedMoney` | 400 ms `IntTween` between paise values through `formatPaise`. |
-| `StatusChip` | Danger / warning / success / info pill; `onGradient` switches to white-on-frost for gradient headers. |
-| `SectionHeader` | Title + optional count pill. |
-| `BrandLogo` | Squircle + bill-slip + badge + cross; fractions mirror the launcher foreground 1:1, so splash and icon match. |
+Disclosed risks (accepted, documented for the owner):
 
-Launcher set: adaptive icon (gradient background drawable, foreground,
-monochrome) plus legacy `mipmap-*` dirs; `assets/icon.png` is the
-512×512 store source.
+- **Backups are plaintext.** Any copy is a readable ledger — including supplier
+  names and phone numbers. The app states this on the Backup Now tile, in the
+  share text and in the transfer guide.
+- **App-private copies accumulate** in the documents directory and in the OS
+  share/picker caches. They are private to the app, but they exist until the app
+  data is cleared.
+- **The signing keystore and its password live inside the project folder** on the
+  build machine. They are gitignored and absent from git history, but any copy of
+  the folder leaks them. Keep the release keystore outside the project tree: it is gitignored and absent from history, but any copy of the folder leaks it, and the shipped APK is v2-signed only, so the key cannot be rotated.
+
+---
+
+## Failure modes
+
+| Failure | Detection | Behaviour |
+|---|---|---|
+| Stream error (DB unreadable) | `AsyncError` on the watched provider | Error card with Retry; no fake zeros |
+| Cold load | `valueOrNull == null` | Skeleton everywhere — never a `₹0` flash |
+| Supplier deleted while open | live distributor list no longer contains the id | Ghost card: `This supplier no longer exists.` |
+| Bill deleted while open | `billByIdProvider` returns null | Ghost card: `This bill no longer exists.` |
+| Payment unreadable before delete | `getPaymentsByBill` throws | Delete aborted with a message (never a guessed count) |
+| Undo after leaving the screen | database captured before the snackbar | Re-inserts the exact row, or reports failure |
+| Overpay | amount > outstanding | Danger confirm naming the excess |
+| Payment date before bill date | create flow only | Blocked with a message; existing payments stay editable |
+| Backup snapshot mismatch | validation + row counts | Snapshot discarded; failure reported |
+| Restore candidate invalid | validation gate | `invalid`; live ledger untouched |
+| Safety copy impossible | `VACUUM INTO` + copy both fail | Restore refused before the database is closed |
+| Sidecar cannot be removed | `-wal`/`-shm`/`-journal` still present | Restore aborted and the safety copy restored |
+
+---
+
+## Testing strategy
+
+```mermaid
+flowchart TD
+    Unit["Pure-function tests\nmoney · status · summary · bill_view · update tags"] --> Suite
+    Data["Database tests\nin-memory drift: aggregates, cascades, migrations"] --> Suite
+    Files["File tests\nhand-built backup fixtures through the validation gate"] --> Suite
+    Widget["Widget tests\nreal DB + provider override, bounded pumps"] --> Suite
+    Suite["flutter test — 214 tests, offline, no device"]
+```
+
+Rules that keep the suite honest:
+
+- **Real database, real files.** No mocked persistence; the tests exercise the
+  same code paths the app does, including drift's streams and the restore gate.
+- **Bounded pumps, never `pumpAndSettle`.** Loading states animate forever, so
+  "settled" never arrives; helpers pump until a condition holds or a budget runs
+  out.
+- **The reporting device's geometry.** `phoneSurface()` runs layout at
+  393 × 873 dp, where row pressure is real.
+- **Shipped-font measurement.** Widget tests render glyphs as 1-em boxes, so
+  "does this text fit" is answered with a `TextPainter` using the bundled Roboto,
+  while the widget's own assertion answers "was it clipped".
+- **Explicit unmount** flushes drift's stream-cancel timer.
+- **Assertions name the guarantee**, not the implementation: money values are
+  spelled out numerically, filters assert which rows remain, and negative
+  assertions match patterns rather than one literal string.
+
+Not automated by design: the platform file picker, the share sheet, path
+channels, and phone dialing (device-only), plus the auto-backup lifecycle hook.
+
+---
 
 ## Module map
 
 ```text
-lib/main.dart                        prefs preload, scope, MaterialApp
-lib/database/                        tables, BillMedDatabase (v4), BillPaid
-lib/models/                          bill_status (status + overdueDays=30),
-                                     enums (5 payment modes)
-lib/providers/                       database + 4 watched providers, theme
+lib/main.dart                          prefs → theme override → MaterialApp
+lib/database/
+  tables.dart                          drift tables + indexes
+  database.dart                        schema v4, migrations, cascades, BillPaid
+  database.g.dart                      generated
+lib/models/
+  bill_status.dart                     status + overdueDays = 30
+  enums.dart                           five payment modes
+lib/providers/
+  database_provider.dart               database + 3 watched streams + bill lookup
+  theme_provider.dart                  theme mode persistence
 lib/services/
-  summary_service.dart               buildDashboardSummary (per-supplier netting)
-  backup_service.dart                export / auto / import + probe + safety
-  pdf_export_service.dart            statement generate + share (temp file)
-  update_service.dart                manualCheck vs GitHub releases
-lib/screens/splash_screen.dart       staged logo, shell, epoch link, pause backup
-lib/screens/dashboard/               hero 300, sparkline, rail, paid row, ledger
-lib/screens/bills/                   list, detail sliver, add/edit bill
-lib/screens/payments/                add/edit payment, 5 modes, overpay guard
-lib/screens/distributors/            list + detail sliver + call + share
-lib/screens/settings/                theme, transfer guide, backup tiles,
-                                     restore flow, update check, version
-lib/theme/app_theme.dart             colors, gradients, radius, motion, shadow
-lib/widgets/                         mesh, glass, sparkline x2, sheets, chips,
-                                     animated money, brand mark, press, sections
-lib/utils/                           money (formatPaise + parser), text helpers
-android/app/src/main/                INTERNET-only manifest, backup rules,
-                                     adaptive + legacy icons
-test/ (12 files, 95 tests)           memory DB, bounded pumps, pure-function
-                                     coverage; picker/share/path untestable
+  backup_service.dart                  export · auto · validated restore · gate
+  bill_view_service.dart               supplier scopes, counts, sort (pure)
+  summary_service.dart                 per-supplier netting and totals (pure)
+  update_service.dart                  GitHub release check (hardened)
+lib/screens/
+  splash_screen.dart                   staged logo, 4-tab shell, deep link
+  dashboard/dashboard_screen.dart      hero, rail, dues ledger, month maths
+  bills/bill_list_screen.dart          search, chips, supplier/sort, undo
+  bills/bill_detail_screen.dart        header, meta, payment timeline
+  bills/add_bill_screen.dart           create/edit with duplicate guard
+  payments/add_payment_screen.dart     modes, Pay Full, guards
+  distributors/distributor_list_screen.dart   ledger + search + tile menu
+  distributors/distributor_detail_screen.dart tiles-as-filters + bill ledger
+  distributors/add_distributor_screen.dart
+  settings/settings_screen.dart        theme, backup/restore, updates
+lib/theme/app_theme.dart               palette, gradients, radius, motion, haptics
+lib/utils/money.dart                   integer-paise parse/format
+lib/utils/text.dart                    plural, initial
+lib/widgets/                           15 widgets, exported by widgets.dart
+test/                                  22 test files + widget_harness.dart
+android/                               manifest, backup rules, icons, signing config
+.github/workflows/build.yml            format · analyze --fatal-infos · test
 ```
+
+---
+
+## Decisions and trade-offs
+
+| Decision | Why | Trade-off accepted |
+|---|---|---|
+| One watched query feeds everything | No cache can go stale; screens stay trivial | Every write re-emits the full bill list |
+| Integer paise | No float drift in money | Input must be parsed with care (grouping rules) |
+| Per-supplier netting with clamp | Matches how a shopkeeper thinks about one supplier | Headline can differ from a naive global net — resolved by summing rows (I8) |
+| `fullySettled` instead of `hasPending` for the clear state | Netting can zero the dues while a bill is unpaid | Three call sites must use the right predicate |
+| Paid scope = any payment | The tile and the list must be reconcilable | Pending and Paid scopes overlap on partly paid bills |
+| Payments are history, not balances | One row per payment, editable and undoable | Status must be derived on every read |
+| Restore validates the full column set | A half-valid file used to brick the app permanently | Slightly stricter than "it opens", so some foreign SQLite files are refused |
+| Snapshot verification before publishing | "Backup saved" must mean something | A failure means no backup file at all — honest instead of silently stale |
+| Backups stay plaintext | A shopkeeper can open them in any SQLite tool; no key to lose | Anyone with the file reads the ledger — disclosed in three places |
+| No PDF statement | The supplier page answers the same question faster | Nothing to email or print |
+| Names wrap then scroll (no `LayoutBuilder`) | Works inside `IntrinsicHeight`; no clipping | A very long name moves, which some may find busy (honours "remove animations") |
+| `TickerMode` per tab | Hidden tabs stop animating | Tab state is preserved, animations resume on return |

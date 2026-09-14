@@ -23,13 +23,17 @@ class UpdateService {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) throw Exception('network');
+      // A release body is a few kilobytes. Refuse to decode something absurd
+      // instead of buffering it into the UI isolate.
+      if (response.bodyBytes.length > 256 * 1024) {
+        throw Exception('oversized');
+      }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
       final latestTag = data['tag_name'] as String? ?? '';
-      if (latestTag.trim().isEmpty) throw Exception('empty-tag');
-      final stripped = _stripTag(latestTag);
-      final (latestVersion, latestBuild) = _splitVersionBuild(stripped);
-      if (latestVersion.isEmpty) throw Exception('empty-version');
+      final version = versionFromTag(latestTag);
+      if (version.isEmpty) throw Exception('empty-version');
+      final (latestVersion, latestBuild) = _splitVersionBuild(version);
       final apkAsset = _hasApkAsset(data);
 
       if (!_isUpdateAvailable(
@@ -71,8 +75,24 @@ class UpdateService {
 
   static String _stripTag(String tag) {
     final t = tag.trim();
-    if (t.startsWith('v')) return t.substring(1).trim();
+    if (t.startsWith('v') || t.startsWith('V')) return t.substring(1).trim();
     return t;
+  }
+
+  /// The tag comes from the network and is rendered inside a dialog that looks
+  /// like a system prompt, so only a version-shaped string is accepted: a
+  /// hostile or malformed tag makes the check fail closed instead of printing
+  /// arbitrary text ("9.9.9 — tap Update to restore your data") or a
+  /// multi-megabyte string.
+  @visibleForTesting
+  static String versionFromTag(String tag) {
+    final stripped = _stripTag(tag);
+    if (stripped.isEmpty || stripped.length > 24) return '';
+    if (!RegExp(r'^\d{1,4}(\.\d{1,4}){0,2}([-+][0-9A-Za-z.\-]{0,20})?$')
+        .hasMatch(stripped)) {
+      return '';
+    }
+    return stripped;
   }
 
   static bool _hasApkAsset(Map<String, dynamic> data) {

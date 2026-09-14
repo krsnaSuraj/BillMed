@@ -54,15 +54,17 @@ void main() {
         '--5': 0,
         '5..5': 0,
         ',,,': 0,
-        '1,2,3': 12300,
         '0.001': 0,
         // 3 decimals never reach rounding: regex allows max 2 decimals.
         '0.005': 0,
         '999999999999': 0,
         '₹100': 0,
         '.5': 0,
-        // Commas are stripped blindly, so odd groupings still parse.
-        '1,,000': 100000,
+        // A comma is only a grouping separator, never a decimal point: these
+        // are rejected instead of being read as ₹123 / ₹1,000.
+        '1,2,3': 0,
+        '1,,000': 0,
+        '12,50': 0,
       };
       cases.forEach((input, expected) {
         expect(rupeesInputToPaise(input), expected, reason: 'input "$input"');
@@ -113,8 +115,10 @@ void main() {
     test('fully settled bills: pending 0 with settled counts', () {
       final d = _dist(1, 'Settled');
       final bills = [
-        BillPaid(bill: _bill(1, 1, 50000, DateTime(2026, 5, 1)), paidPaise: 50000),
-        BillPaid(bill: _bill(2, 1, 25000, DateTime(2026, 5, 2)), paidPaise: 25000),
+        BillPaid(
+            bill: _bill(1, 1, 50000, DateTime(2026, 5, 1)), paidPaise: 50000),
+        BillPaid(
+            bill: _bill(2, 1, 25000, DateTime(2026, 5, 2)), paidPaise: 25000),
       ];
       final s = buildDashboardSummary([d], bills, now: DateTime(2026, 5, 10));
       expect(s.totalBills, 2);
@@ -128,7 +132,8 @@ void main() {
       expect(s.balances.single.hasPending, isFalse);
     });
 
-    test('overpay bill: remaining 0, overpaid, pending 0, totals preserved', () {
+    test('overpay bill: remaining 0, overpaid, pending 0, totals preserved',
+        () {
       final d = _dist(1, 'Credit');
       final bp = BillPaid(
         bill: _bill(1, 1, 10000, DateTime(2026, 5, 1)),
@@ -151,7 +156,8 @@ void main() {
       final past = buildDashboardSummary([d], bills, now: DateTime(2026, 5, 2));
       expect(past.overdueCount, 0);
       expect(past.balances.single.overdueCount, 0);
-      final future = buildDashboardSummary([d], bills, now: DateTime(2026, 7, 1));
+      final future =
+          buildDashboardSummary([d], bills, now: DateTime(2026, 7, 1));
       expect(future.overdueCount, 1);
       expect(future.balances.single.overdueCount, 1);
     });

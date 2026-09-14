@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 /// Aurora mesh backdrop: soft indigo/teal/mint blobs on transparent canvas.
 /// Place in a Stack behind headers; content sits on top.
 class MeshHeader extends StatelessWidget {
-  const MeshHeader({super.key, this.height = 230, this.opacity = 1.0});
+  const MeshHeader({super.key, this.height = 230});
 
   final double height;
-  final double opacity;
 
   @override
   Widget build(BuildContext context) {
@@ -14,21 +13,18 @@ class MeshHeader extends StatelessWidget {
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: Opacity(
-        opacity: opacity,
-        child: ClipRect(
-          // Melt the bottom edge into the background: without this the
-          // header band ends in a hard visible line (see Bills screen).
-          child: ShaderMask(
-            shaderCallback: (r) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.black, Colors.black, Colors.transparent],
-              stops: [0.0, 0.62, 1.0],
-            ).createShader(r),
-            blendMode: BlendMode.dstIn,
-            child: CustomPaint(painter: _MeshPainter(dark: dark)),
-          ),
+      child: ClipRect(
+        // Melt the bottom edge into the background: without this the
+        // header band ends in a hard visible line (see Bills screen).
+        child: ShaderMask(
+          shaderCallback: (r) => const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black, Colors.black, Colors.transparent],
+            stops: [0.0, 0.62, 1.0],
+          ).createShader(r),
+          blendMode: BlendMode.dstIn,
+          child: CustomPaint(painter: _MeshPainter(dark: dark)),
         ),
       ),
     );

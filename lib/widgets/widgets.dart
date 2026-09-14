@@ -12,3 +12,4 @@ export 'skeleton.dart';
 export 'sparkline.dart';
 export 'status_chip.dart';
 export 'tilt_hero.dart';
+export 'wrap_or_scroll_text.dart';

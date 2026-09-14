@@ -155,9 +155,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final onSeeOverdue = widget.onSeeOverdue;
     final settledCount =
         s.balances.fold<int>(0, (acc, b) => acc + b.settledCount);
-    final withDues = s.balances.where((b) => b.hasPending).length;
-    final monthly = monthlyPurchasePaise(bills);
-    final months = lastSixMonths();
+    final withDues = s.balances.where((b) => !b.fullySettled).length;
+    // One clock read for the whole frame: two `DateTime.now()` calls let the
+    // bars and the month labels disagree when a month ticks over between them.
+    final now = DateTime.now();
+    final monthly = monthlyPurchasePaise(bills, now: now);
+    final months = lastSixMonths(now: now);
     var sixMonthPaise = 0;
     for (final v in monthly) {
       sixMonthPaise += v.round();
@@ -166,7 +169,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     for (final bp in bills) {
       if (bp.isOverdue) overduePaise += bp.remainingPaise;
     }
-    final todayLabel = DateFormat('d MMM yyyy').format(DateTime.now());
+    final todayLabel = DateFormat('d MMM yyyy').format(now);
 
     return ListView(
       controller: _ctrl,
@@ -258,7 +261,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               index: i,
               child: _BalanceLedgerRow(
                 balance: s.balances[i],
-                isLast: i == s.balances.length - 1,
                 onTap: () {
                   AppHaptics.select();
                   Navigator.push(
@@ -454,19 +456,17 @@ class _PaidLedgerRow extends StatelessWidget {
 class _BalanceLedgerRow extends StatelessWidget {
   const _BalanceLedgerRow({
     required this.balance,
-    required this.isLast,
     required this.onTap,
   });
 
   final DistributorBalance balance;
-  final bool isLast;
   final VoidCallback onTap;
 
   Color get _rail => balance.overdueCount > 0
       ? AppColors.danger
-      : balance.hasPending
-          ? AppColors.warning
-          : AppColors.success;
+      : balance.fullySettled
+          ? AppColors.success
+          : AppColors.warning;
 
   @override
   Widget build(BuildContext context) {
@@ -504,9 +504,9 @@ class _BalanceLedgerRow extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: b.hasPending
-                        ? AppGradients.brand
-                        : AppGradients.successSoft,
+                    gradient: b.fullySettled
+                        ? AppGradients.successSoft
+                        : AppGradients.brand,
                   ),
                   child: Text(
                     initialLetter(b.distributor.name),
@@ -526,10 +526,14 @@ class _BalanceLedgerRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        b.distributor.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      // The name owns the whole column — the dues amount sits
+                      // on the meta line below it, so long trade names like
+                      // "Shree Ganesh Medical Agency (Wholesale)" wrap at word
+                      // boundaries; a name too long even for that scrolls
+                      // instead of being cut.
+                      WrapOrScrollText(
+                        name: b.distributor.name,
+                        maxLines: 2,
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
@@ -546,63 +550,66 @@ class _BalanceLedgerRow extends StatelessWidget {
                           ),
                         ),
                       const SizedBox(height: 2),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(text: plural(b.billCount, 'bill')),
-                            if (b.overdueCount > 0)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text.rich(
                               TextSpan(
-                                text: ' · ${b.overdueCount} overdue',
-                                style: const TextStyle(
-                                  color: AppColors.danger,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                children: [
+                                  TextSpan(text: plural(b.billCount, 'bill')),
+                                  if (b.overdueCount > 0)
+                                    TextSpan(
+                                      text: ' · ${b.overdueCount} overdue',
+                                      style: const TextStyle(
+                                        color: AppColors.danger,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                ],
                               ),
-                          ],
-                        ),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.subtitleColor(context),
-                        ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.subtitleColor(context),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // "Clear" only when nothing is left to pay. Netting
+                          // an advance can zero the amount while an unsettled
+                          // bill remains — that row is not clear.
+                          if (!b.fullySettled)
+                            AnimatedMoney(
+                              paise: b.pendingPaise,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: AppColors.danger,
+                              ),
+                            )
+                          else
+                            const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle,
+                                    size: 16, color: AppColors.success),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Clear',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (b.hasPending)
-                      AnimatedMoney(
-                        paise: b.pendingPaise,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: AppColors.danger,
-                        ),
-                      )
-                    else
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle,
-                              size: 16, color: AppColors.success),
-                          SizedBox(width: 4),
-                          Text(
-                            'Clear',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
                 ),
               ),
             ],

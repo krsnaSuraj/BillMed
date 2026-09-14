@@ -1,7 +1,7 @@
 name: billmed
 description: Distributor bill payment tracker for medical retail shops. Flutter offline app.
 publish_to: 'none'
-version: 0.1.0+5
+version: 0.1.1+7
 
 environment:
   sdk: ^3.3.0
@@ -21,7 +21,6 @@ dependencies:
   package_info_plus: ^8.0.0
   url_launcher: ^6.0.0
   shared_preferences: ^2.3.0
-  pdf: ^3.11.0
 
 dev_dependencies:
   flutter_test:
@@ -32,7 +31,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/icon.png
-    - assets/fonts/Roboto-Regular.ttf
-    - assets/fonts/Roboto-Bold.ttf
+
+# No bundled assets: the launcher/store icon comes from android/ res, the app
+# renders with the system Roboto (Android), and the Roboto files in assets/fonts
+# exist only as the reference/test face (assets/fonts/Roboto-*.ttf) — declaring
+# them here only shipped 432 KB of unused payload inside the APK.

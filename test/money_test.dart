@@ -34,6 +34,26 @@ void main() {
     test('strips Indian comma grouping', () {
       expect(rupeesInputToPaise('12,34,567'), 123456700);
       expect(rupeesInputToPaise('1,000.25'), 100025);
+      // Western grouping is accepted too.
+      expect(rupeesInputToPaise('1,234,567'), 123456700);
+      expect(rupeesInputToPaise('9,99,999.99'), 99999999);
+    });
+
+    test('a comma that is not grouping is REJECTED, never reinterpreted', () {
+      // "12,50" means ₹12.50 to the person typing it. Stripping the comma
+      // blindly used to record ₹1,250 — a hundred-fold error that nothing in
+      // the UI echoed back, so the invalid signal (0 → form error) is the only
+      // safe answer.
+      expect(rupeesInputToPaise('12,50'), 0);
+      expect(rupeesInputToPaise('1,50'), 0);
+      expect(rupeesInputToPaise('1,2,3'), 0);
+      expect(rupeesInputToPaise('1,,000'), 0);
+      expect(rupeesInputToPaise('1250,'), 0);
+      expect(rupeesInputToPaise(',250'), 0);
+      expect(rupeesInputToPaise('1,2345'), 0);
+      expect(rupeesInputToPaise('1234,567'), 0);
+      expect(rupeesInputToPaise('1,000.2,5'), 0);
+      expect(isValidRupeesInput('12,50'), isFalse);
     });
 
     test('rejects invalid input as zero', () {
@@ -44,11 +64,19 @@ void main() {
       expect(rupeesInputToPaise('.'), 0);
     });
 
+    test('literal paise for tricky decimals (catches a truncating parser)', () {
+      // Asserting the round-trip only proves the parser and the formatter
+      // agree; these literals pin the rounding itself.
+      expect(rupeesInputToPaise('0.07'), 7);
+      expect(rupeesInputToPaise('19.99'), 1999);
+      expect(rupeesInputToPaise('1234.57'), 123457);
+      expect(rupeesInputToPaise('8.85'), 885);
+      expect(rupeesInputToPaise('0.005'), 0, reason: '3 decimals are invalid');
+    });
+
     test('no float drift on tricky decimals', () {
       for (final input in ['0.07', '19.99', '1234.57', '8.85']) {
         final p = rupeesInputToPaise(input);
-        expect(p, rupeesInputToPaise(input),
-            reason: 'deterministic for $input');
         expect(p % 100, lessThan(100));
         expect(
           paiseToEditableString(p),

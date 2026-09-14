@@ -248,9 +248,9 @@ class _SupplierListBodyState extends ConsumerState<_SupplierListBody> {
     final d = b.distributor;
     final railColor = b.overdueCount > 0
         ? AppColors.danger
-        : b.hasPending
-            ? AppColors.warning
-            : AppColors.success;
+        : b.fullySettled
+            ? AppColors.success
+            : AppColors.warning;
     return PressScale(
         onTap: () {
           AppHaptics.select();
@@ -262,12 +262,15 @@ class _SupplierListBodyState extends ConsumerState<_SupplierListBody> {
         curve: Curves.easeOut,
         label: d.name,
         child: Container(
-          decoration: b.hasPending
-              ? null
-              : BoxDecoration(
+          // Settled tint and green rail only when nothing is left to pay:
+          // netting an advance can zero the dues while an unsettled bill
+          // remains, and that row must not read as done.
+          decoration: b.fullySettled
+              ? BoxDecoration(
                   color: AppColors.success.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
+                )
+              : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             child: IntrinsicHeight(
@@ -312,10 +315,15 @@ class _SupplierListBodyState extends ConsumerState<_SupplierListBody> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            d.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          // The name owns the whole column (the dues amount
+                          // moved to the meta line below it): trade names like
+                          // "Shree Ganesh Medical Agency (Wholesale)" need ~180 dp
+                          // to wrap at word boundaries, and the amount column
+                          // used to leave the name only ~138 dp. Longer names
+                          // scroll rather than being cut.
+                          WrapOrScrollText(
+                            name: d.name,
+                            maxLines: 2,
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -336,64 +344,68 @@ class _SupplierListBodyState extends ConsumerState<_SupplierListBody> {
                               ),
                             ),
                           const SizedBox(height: 4),
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: plural(b.billCount, 'bill')),
-                                if (b.overdueCount > 0)
-                                  const TextSpan(text: '  '),
-                                if (b.overdueCount > 0)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text.rich(
                                   TextSpan(
-                                    text: '${b.overdueCount} overdue'
-                                        .toUpperCase(),
-                                    style: const TextStyle(
-                                      color: AppColors.danger,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    children: [
+                                      TextSpan(
+                                          text: plural(b.billCount, 'bill')),
+                                      if (b.overdueCount > 0)
+                                        const TextSpan(text: '  '),
+                                      if (b.overdueCount > 0)
+                                        TextSpan(
+                                          text: '${b.overdueCount} overdue'
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                            color: AppColors.danger,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                              ],
-                            ),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.subtitleColor(context),
-                            ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.subtitleColor(context),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (!b.fullySettled)
+                                AnimatedMoney(
+                                  paise: b.pendingPaise,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: AppColors.danger,
+                                  ),
+                                )
+                              else
+                                const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle,
+                                        size: 16, color: AppColors.success),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Clear',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (b.hasPending)
-                        AnimatedMoney(
-                          paise: b.pendingPaise,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: AppColors.danger,
-                          ),
-                        )
-                      else
-                        const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle,
-                                size: 16, color: AppColors.success),
-                            SizedBox(width: 4),
-                            Text(
-                              'Clear',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.success,
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
                   ),
                   _tileMenu(b),
                 ],

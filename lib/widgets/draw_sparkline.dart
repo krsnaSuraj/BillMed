@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'sparkline.dart';
@@ -34,19 +35,11 @@ class _DrawSparklineState extends State<DrawSparkline>
   @override
   void didUpdateWidget(covariant DrawSparkline oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_sameValues(oldWidget.values, widget.values)) {
+    if (!listEquals(oldWidget.values, widget.values)) {
       _ctrl
         ..reset()
         ..forward();
     }
-  }
-
-  bool _sameValues(List<double> a, List<double> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   @override

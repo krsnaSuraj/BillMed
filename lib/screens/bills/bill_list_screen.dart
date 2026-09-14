@@ -159,6 +159,22 @@ class _BillListScreenState extends ConsumerState<BillListScreen> {
         d.id: d.name
     };
 
+    // A supplier filter pinned to a supplier deleted elsewhere would keep the
+    // list empty behind a pill that fell back to its generic "Supplier" label,
+    // with no way to see what is filtering it. Drop the stale pin — but only
+    // once the supplier list has actually loaded, or a cold start would clear
+    // a filter that is still valid.
+    if (namesAsync.hasValue &&
+        _supplierId != null &&
+        !names.containsKey(_supplierId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _supplierId == null) return;
+        if (!names.containsKey(_supplierId)) {
+          setState(() => _supplierId = null);
+        }
+      });
+    }
+
     final allBills = billsAsync.valueOrNull ?? const <BillPaid>[];
     final searched = _applyQuery(allBills, names);
     final scoped = _applySupplier(searched);
@@ -807,10 +823,13 @@ class _BillTile extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '$name · ${_BillListScreenState._dateFmt.format(bp.bill.billDate)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      // Same guarantee as the supplier rows: a long supplier
+                      // name wraps, and walks if even wrapping cannot hold it —
+                      // it is never cut with an ellipsis.
+                      WrapOrScrollText(
+                        name:
+                            '$name · ${_BillListScreenState._dateFmt.format(bp.bill.billDate)}',
+                        maxLines: 2,
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.subtitleColor(context),

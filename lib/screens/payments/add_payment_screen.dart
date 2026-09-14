@@ -98,10 +98,31 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     return discard;
   }
 
+  /// True only when the amount field really holds the full outstanding
+  /// amount. The chip's tick is driven by this — never by "the chip was
+  /// rendered", which is what made it look pre-ticked.
+  bool get _isFullAmount {
+    final outstanding = widget.outstandingPaise;
+    if (outstanding <= 0) return false;
+    return rupeesInputToPaise(_amountCtrl.text) == outstanding;
+  }
+
   void _payFull() {
+    final outstanding = widget.outstandingPaise;
+    if (outstanding <= 0) return;
     AppHaptics.select();
     setState(() {
-      _amountCtrl.text = paiseToEditableString(widget.outstandingPaise);
+      if (_isFullAmount) {
+        // Already full: the tick means "filled by the shortcut", so a second
+        // tap takes the fill back instead of doing nothing.
+        _amountCtrl.clear();
+        return;
+      }
+      final full = paiseToEditableString(outstanding);
+      _amountCtrl.value = TextEditingValue(
+        text: full,
+        selection: TextSelection.collapsed(offset: full.length),
+      );
     });
   }
 
@@ -130,16 +151,18 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
       final db = ref.read(databaseProvider);
       final bill = await db.getBill(widget.billId);
       if (!mounted) return;
-      if (bill != null &&
+      // Create only: editing a bill's date forward can strand an existing
+      // payment *before* its bill, and a guard that also applied to edits
+      // locked that payment so it could never be saved again.
+      if (!_isEditing &&
+          bill != null &&
           DateUtils.dateOnly(_paymentDate)
               .isBefore(DateUtils.dateOnly(bill.billDate))) {
-        if (mounted) {
-          showAppSnack(
-            context,
-            'Payment date cannot be before the bill date',
-            success: false,
-          );
-        }
+        showAppSnack(
+          context,
+          'Payment date cannot be before the bill date',
+          success: false,
+        );
         return;
       }
       final amountPaise = rupeesInputToPaise(_amountCtrl.text);
@@ -253,15 +276,38 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: InputChip(
-                          avatar: const CircleAvatar(
-                            radius: 10,
-                            child: Icon(Icons.check, size: 14),
-                          ),
-                          label: const Text('Pay Full',
-                              style: TextStyle(fontSize: 13)),
-                          onPressed: _payFull,
-                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _amountCtrl,
+                          builder: (context, value, _) {
+                            final bool full = _isFullAmount;
+                            return InputChip(
+                              // Tick only while the full amount is actually
+                              // in the field; otherwise a plain "fill it for
+                              // me" bolt.
+                              avatar: CircleAvatar(
+                                radius: 10,
+                                backgroundColor: full
+                                    ? AppColors.success
+                                    : Theme.of(context).colorScheme.primary,
+                                child: Icon(
+                                  full ? Icons.check : Icons.bolt,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              label: Text(
+                                full ? 'Full amount' : 'Pay Full',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              selected: full,
+                              // InputChip would draw its own checkmark even
+                              // before any tap — that is the bug being fixed.
+                              showCheckmark: false,
+                              onSelected: (_) => _payFull(),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.padded,
+                            );
+                          },
                         ),
                       ),
                     ],

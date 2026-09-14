@@ -38,31 +38,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   /// Scans app storage for the newest backup file so the user can always
-  /// see and re-share it. Manual backups win over the auto snapshot.
-  Future<void> _loadLastBackup() async {
+  /// see and re-share it. Manual backups win over the pre-restore safety copy,
+  /// which wins over the auto snapshot.
+  ///
+  /// One scan for both the tile label and the re-share action: two copies of
+  /// this logic could disagree about which file the tile is describing.
+  Future<List<File>> _backupFiles() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final files = dir.listSync().whereType<File>().where((f) {
         final name = p.basename(f.path);
         return name.startsWith('BillMed_backup_') ||
+            name.startsWith('BillMed_pre_restore_') ||
             name == 'BillMed_auto_backup.db';
       }).toList();
-      if (files.isEmpty) {
-        if (mounted) setState(() => _lastBackupLabel = null);
-        return;
-      }
       files
           .sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-      final manual =
-          files.where((f) => p.basename(f.path).startsWith('BillMed_backup_'));
-      final latest = manual.isNotEmpty ? manual.first : files.first;
+      return files;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Manual export > pre-restore safety copy > auto snapshot. The safety copy
+  /// matters most exactly when the user has just restored and wants their
+  /// previous ledger back.
+  File? _newestBackup(List<File> files) {
+    if (files.isEmpty) return null;
+    for (final prefix in const [
+      'BillMed_backup_',
+      'BillMed_pre_restore_',
+      'BillMed_auto_backup.db',
+    ]) {
+      final match = files.where((f) => p.basename(f.path).startsWith(prefix));
+      if (match.isNotEmpty) return match.first;
+    }
+    return files.first;
+  }
+
+  static const Map<String, String> _backupKindLabels = {
+    'BillMed_backup_': 'Backup',
+    'BillMed_pre_restore_': 'Before restore',
+    'BillMed_auto_backup.db': 'Auto backup',
+  };
+
+  String _kindOf(String path) {
+    final name = p.basename(path);
+    for (final entry in _backupKindLabels.entries) {
+      if (name.startsWith(entry.key)) return entry.value;
+    }
+    return 'Backup';
+  }
+
+  Future<void> _loadLastBackup() async {
+    final latest = _newestBackup(await _backupFiles());
+    if (!mounted) return;
+    if (latest == null) {
+      setState(() => _lastBackupLabel = null);
+      return;
+    }
+    try {
       final stat = latest.lastModifiedSync();
       final sizeKb = (latest.lengthSync() / 1024).ceil();
-      final kind = p.basename(latest.path).startsWith('BillMed_backup_')
-          ? 'Backup'
-          : 'Auto backup';
-      final label =
-          '$kind · ${DateFormat('d MMM, HH:mm').format(stat)} · $sizeKb KB';
+      final label = '${_kindOf(latest.path)} · '
+          '${DateFormat('d MMM, HH:mm').format(stat)} · $sizeKb KB';
       if (mounted) setState(() => _lastBackupLabel = label);
     } catch (_) {
       if (mounted) setState(() => _lastBackupLabel = null);
@@ -70,51 +109,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   /// Re-shares the newest backup file (the share sheet can be dismissed).
-  /// Manual backups win; the auto snapshot is the fallback so the tile
-  /// never promises a file it cannot deliver.
   Future<void> _reshareBackup() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final files = dir.listSync().whereType<File>().where((f) {
-        final name = p.basename(f.path);
-        return name.startsWith('BillMed_backup_') ||
-            name == 'BillMed_auto_backup.db';
-      }).toList();
-      if (files.isEmpty) {
+      final latest = _newestBackup(await _backupFiles());
+      if (latest == null) {
         if (!mounted) return;
         showAppSnack(context, 'No backup yet — tap Backup Now first.',
             success: false);
         return;
       }
-      files
-          .sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-      final manual =
-          files.where((f) => p.basename(f.path).startsWith('BillMed_backup_'));
-      final latest = manual.isNotEmpty ? manual.first : files.first;
-      // Never share a torn snapshot (e.g. a kill mid-export left a
-      // partial that the loader would otherwise offer).
-      if (!await latest.exists() || await latest.length() < 100) {
+      // Never share a torn or foreign file: the same validation the restore
+      // path uses (header, schema version, required columns, integrity), so
+      // "My Backups" cannot hand the user a file the app itself would refuse.
+      if (!await BackupService.validateBackupFile(latest.path)) {
         if (!mounted) return;
         showAppSnack(context, 'Latest backup is incomplete — tap Backup Now.',
             success: false);
         return;
       }
-      final raf = latest.openSync();
-      try {
-        final header = raf.readSync(15);
-        if (header.length < 15 ||
-            String.fromCharCodes(header) != 'SQLite format 3') {
-          if (!mounted) return;
-          showAppSnack(context, 'Latest backup is incomplete — tap Backup Now.',
-              success: false);
-          return;
-        }
-      } finally {
-        raf.closeSync();
-      }
       await Share.shareXFiles(
         [XFile(latest.path)],
-        text: 'BillMed Backup — save this file securely.',
+        // Same disclosure as Backup Now: the file is a readable ledger.
+        text: 'BillMed backup — NOT encrypted. Keep it somewhere only you '
+            'can access.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -139,11 +156,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await _loadLastBackup();
       if (!mounted) return;
       if (path != null) {
-        showAppSnack(context, 'Backup saved on this phone.');
-      } else if (BackupService.isBusy) {
-        showAppSnack(context, 'A backup is running — please try again.',
-            success: false);
+        // The file is a plaintext ledger and it has just been handed to the
+        // share sheet — say both, at the moment the user acts.
+        showAppSnack(
+          context,
+          'Backup saved. Share it somewhere only you can access.',
+        );
       } else {
+        // exportBackup clears its own busy flag in `finally`, so checking
+        // isBusy here could never be true (dead branch removed).
         showAppSnack(context, 'Backup failed — please try again.',
             success: false);
       }
@@ -162,7 +183,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context,
       title: 'Restore from backup?',
       message: 'Your CURRENT data will be replaced by the backup file.\n\n'
-          'A safety copy of your current data will be saved first.',
+          'A safety copy of your current data will be saved first.\n\n'
+          'Only restore a file BillMed itself created.',
       confirmLabel: 'Continue',
     );
     if (!confirmed) return;
@@ -440,7 +462,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         subtitle: Text(
                           _backupBusy
                               ? 'Preparing backup file...'
-                              : 'Export your full database as a shareable file',
+                              // Plaintext, said where the user actually taps
+                              // it — not only inside the transfer guide.
+                              : 'Exports a shareable file. It is NOT encrypted: '
+                                  'keep it where only you can open it.',
                         ),
                         trailing: _busyTrailing(_backupBusy),
                         onTap: (_backupBusy || _restoreBusy)

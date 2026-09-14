@@ -231,8 +231,10 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
     );
   }
 
-  Widget? _buildFab(BillPaid? bp) {
-    if (bp == null || bp.status.isSettled) return null;
+  /// Record Payment is only offered while the bill is unsettled. Non-null by
+  /// contract: the only caller is past the `bp == null` early return.
+  Widget? _buildFab(BillPaid bp) {
+    if (bp.status.isSettled) return null;
     return FloatingActionButton.extended(
       heroTag: 'record-payment-${widget.billId}',
       onPressed: () => _recordPayment(bp.remainingPaise),
@@ -298,7 +300,8 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      await ref.read(databaseProvider).deletePayment(p.id);
+      final db = ref.read(databaseProvider);
+      await db.deletePayment(p.id);
       if (!mounted) return;
       AppHaptics.destroy();
       showAppSnack(
@@ -307,15 +310,18 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
         actionLabel: 'Undo',
         onAction: () async {
           try {
-            await ref.read(databaseProvider).addPayment(PaymentsCompanion(
-                  billId: Value(p.billId),
-                  paymentDate: Value(p.paymentDate),
-                  amountPaise: Value(p.amountPaise),
-                  mode: Value(p.mode),
-                  referenceNo: Value(p.referenceNo),
-                  notes: Value(p.notes),
-                  createdAt: Value(p.createdAt),
-                ));
+            // `db` captured before the snack: the snackbar outlives this route,
+            // and reading `ref` from a disposed ConsumerState throws — which
+            // the catch below then swallowed as a silent no-op Undo.
+            await db.addPayment(PaymentsCompanion(
+              billId: Value(p.billId),
+              paymentDate: Value(p.paymentDate),
+              amountPaise: Value(p.amountPaise),
+              mode: Value(p.mode),
+              referenceNo: Value(p.referenceNo),
+              notes: Value(p.notes),
+              createdAt: Value(p.createdAt),
+            ));
           } catch (_) {
             // Undo failed (e.g. parent bill gone): say so instead of
             // leaving the user believing the payment is back.

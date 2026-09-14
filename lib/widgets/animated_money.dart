@@ -31,21 +31,30 @@ class _AnimatedMoneyState extends State<AnimatedMoney>
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-    _animation = IntTween(begin: _displayed, end: _displayed).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _animation = _tweenTo(_displayed);
+    // One listener for the widget's whole life: adding a listener per value
+    // change (the old shape) stacked a setState per frame for every update.
+    _controller.addListener(_onTick);
   }
+
+  void _onTick() {
+    final int next = _animation.value;
+    if (next != _displayed) setState(() => _displayed = next);
+  }
+
+  Animation<int> _tweenTo(int end) =>
+      IntTween(begin: _displayed, end: end).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
   @override
   void didUpdateWidget(covariant AnimatedMoney oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.paise != widget.paise) {
+      // Snapshot first: the tween has to start where the display currently is.
+      final int from = _displayed;
       _controller.stop();
-      _animation = IntTween(begin: _displayed, end: widget.paise).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-      )..addListener(() {
-          setState(() => _displayed = _animation.value);
-        });
+      _displayed = from;
+      _animation = _tweenTo(widget.paise);
       _controller.forward(from: 0);
     }
   }

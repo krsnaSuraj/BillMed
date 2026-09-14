@@ -234,13 +234,14 @@ class _MainShellState extends ConsumerState<MainShell>
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          DashboardScreen(onSeeOverdue: _openOverdueBills),
-          BillListScreen(
-            key: ValueKey('bills-$_billsFilterEpoch'),
-            initialOverdueOnly: _billsOverdueOnly,
-          ),
-          const DistributorListScreen(),
-          const SettingsScreen(),
+          // TickerMode: a hidden tab must not keep animating. Without it every
+          // background tab (loading shimmer, a scrolling supplier name) ticks
+          // forever behind the visible one and burns battery.
+          for (int i = 0; i < 4; i++)
+            TickerMode(
+              enabled: i == _currentIndex,
+              child: _tabAt(i),
+            ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -279,6 +280,17 @@ class _MainShellState extends ConsumerState<MainShell>
       ),
     );
   }
+
+  /// The four shell tabs, in bottom-navigation order.
+  Widget _tabAt(int index) => switch (index) {
+        0 => DashboardScreen(onSeeOverdue: _openOverdueBills),
+        1 => BillListScreen(
+            key: ValueKey('bills-$_billsFilterEpoch'),
+            initialOverdueOnly: _billsOverdueOnly,
+          ),
+        2 => const DistributorListScreen(),
+        _ => const SettingsScreen(),
+      };
 
   Widget _navItem(int index, IconData icon, String label) {
     final selected = _currentIndex == index;
